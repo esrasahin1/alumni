@@ -1,0 +1,13 @@
+{
+  "name": "alumni-backend",
+  "version": "1.0.0",
+  "description": "Alumni Tracking System Backend",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  }
+}
