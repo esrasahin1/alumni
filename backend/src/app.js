@@ -1,9 +1,10 @@
 const express = require('express');
 const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
 const alumniRoutes = require('./routes/alumniRoutes');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -63,7 +64,350 @@ app.get('/about', (req, res) => {
 // Mevcut /alumni rotası ve kontrol rotaları
 app.use('/alumni', alumniRoutes);
 app.get('/ok', (req, res) => res.status(200).send('ok'));
-app.get('/health', (req, res) => res.status(200).send('ok'));
+
+// GET /api/health → JSON formatında { "status": "ok" } cevabı döner
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// GET /health → Alternatif olarak aynı JSON cevabını döner
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// Database kullanılmadığı için kullanıcıları bellekte tutan dizi (in-memory)
+const users = [];
+
+// POST /api/users → Request body'den gelen kullanıcı bilgisini alır, ID atar ve JSON olarak geri döndürür
+app.post('/api/users', (req, res) => {
+  const newUser = {
+    id: req.body.id ? Number(req.body.id) : users.length + 1,
+    ...req.body
+  };
+  newUser.id = Number(newUser.id);
+  users.push(newUser);
+  res.status(201).json(newUser);
+});
+
+// GET /api/users → Eklenen tüm kullanıcıları JSON listesi olarak döner
+app.get('/api/users', (req, res) => {
+  res.status(200).json(users);
+});
+
+// GET /api/users/:id → ID'ye göre tek bir kullanıcıyı getirir (Bulunamazsa 404 döner)
+app.get('/api/users/:id', (req, res) => {
+  const userId = Number(req.params.id);
+  const user = users.find(u => u.id === userId);
+
+  if (!user) {
+    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+  }
+
+  res.status(200).json(user);
+});
+
+// PUT /api/users/:id → Belirtilen kullanıcının tüm bilgilerini günceller (ID korunur)
+app.put('/api/users/:id', (req, res) => {
+  const userId = Number(req.params.id);
+  const userIndex = users.findIndex(u => u.id === userId);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+  }
+
+  // Kullanıcıyı yeni body ile tamamen değiştir, URL'deki id'yi koru
+  const updatedUser = {
+    id: userId,
+    ...req.body
+  };
+  updatedUser.id = userId; // Request body'de id olsa bile URL'deki id esas alınır
+
+  users[userIndex] = updatedUser;
+  res.status(200).json(updatedUser);
+});
+
+// PATCH /api/users/:id → Belirtilen kullanıcının sadece gönderilen alanlarını kısmi olarak günceller
+app.patch('/api/users/:id', (req, res) => {
+  const userId = Number(req.params.id);
+  const userIndex = users.findIndex(u => u.id === userId);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+  }
+
+  // Mevcut verileri koru, sadece gelen alanları güncelle, id'yi koru
+  const updatedUser = {
+    ...users[userIndex],
+    ...req.body,
+    id: userId
+  };
+
+  users[userIndex] = updatedUser;
+  res.status(200).json(updatedUser);
+});
+
+// DELETE /api/users/:id → Belirtilen ID'deki kullanıcıyı siler
+app.delete('/api/users/:id', (req, res) => {
+  const userId = Number(req.params.id);
+  const userIndex = users.findIndex(u => u.id === userId);
+
+  if (userIndex === -1) {
+    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+  }
+
+  // Kullanıcıyı diziden sil
+  users.splice(userIndex, 1);
+
+  // Başarılı silme durumunda 204 No Content döner
+  res.status(204).send();
+});
+
+// Swagger / OpenAPI 3.0 Dokümantasyonu
+const swaggerDocument = {
+  openapi: "3.0.0",
+  info: {
+    title: "Alumni Tracking System API",
+    version: "1.0.0",
+    description: "Web Programming Dersi - Alumni Tracking System REST API Dokümantasyonu"
+  },
+  servers: [
+    {
+      url: "/",
+      description: "Mevcut Sunucu"
+    }
+  ],
+  paths: {
+    "/api/health": {
+      get: {
+        summary: "Sunucu sağlık kontrolü",
+        description: "API sunucusunun çalışıp çalışmadığını kontrol eder.",
+        responses: {
+          "200": {
+            description: "Sunucu aktif ve sağlıklı",
+            content: {
+              "application/json": {
+                example: { status: "ok" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users": {
+      get: {
+        summary: "Tüm kullanıcıları listeler",
+        description: "Bellekteki mevcut tüm kullanıcıları dizi olarak döner.",
+        responses: {
+          "200": {
+            description: "Kullanıcı listesi",
+            content: {
+              "application/json": {
+                example: [
+                  { id: 1, name: "Esra Sahin", email: "esra@ogr.iu.edu.tr" }
+                ]
+              }
+            }
+          }
+        }
+      },
+      post: {
+        summary: "Yeni bir kullanıcı oluşturur",
+        description: "Yeni bir kullanıcı ekler ve otomatik artan ID ile döner.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string", example: "Esra Sahin" },
+                  email: { type: "string", example: "esra@ogr.iu.edu.tr" }
+                },
+                required: ["name", "email"]
+              }
+            }
+          }
+        },
+        responses: {
+          "201": {
+            description: "Kullanıcı başarıyla oluşturuldu",
+            content: {
+              "application/json": {
+                example: { id: 1, name: "Esra Sahin", email: "esra@ogr.iu.edu.tr" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{id}": {
+      get: {
+        summary: "ID'ye göre kullanıcı getirir",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Getirilmek istenen kullanıcının ID'si"
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Kullanıcı bulundu",
+            content: {
+              "application/json": {
+                example: { id: 1, name: "Esra Sahin", email: "esra@ogr.iu.edu.tr" }
+              }
+            }
+          },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      put: {
+        summary: "Kullanıcı bilgilerini tamamen günceller",
+        description: "Mevcut kullanıcının tüm bilgilerini değiştirir (ID korunur).",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Güncellenecek kullanıcının ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string", example: "Esra Yeni" },
+                  email: { type: "string", example: "esrayeni@ogr.iu.edu.tr" }
+                },
+                required: ["name", "email"]
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Kullanıcı başarıyla güncellendi",
+            content: {
+              "application/json": {
+                example: { id: 1, name: "Esra Yeni", email: "esrayeni@ogr.iu.edu.tr" }
+              }
+            }
+          },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      patch: {
+        summary: "Kullanıcının belirtilen alanlarını kısmi olarak günceller",
+        description: "Yalnızca gönderilen alanlar güncellenir, diğer alanlar ve ID korunur.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Kısmi güncellenecek kullanıcının ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string", example: "Esra Guncel" },
+                  email: { type: "string", example: "esra@ogr.iu.edu.tr" }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Kullanıcı kısmi olarak güncellendi",
+            content: {
+              "application/json": {
+                example: { id: 1, name: "Esra Guncel", email: "esra@ogr.iu.edu.tr" }
+              }
+            }
+          },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      delete: {
+        summary: "Kullanıcıyı siler",
+        description: "Belirtilen ID'ye sahip kullanıcıyı diziden siler.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Silinecek kullanıcının ID'si"
+          }
+        ],
+        responses: {
+          "204": { description: "Kullanıcı başarıyla silindi (İçerik yok)" },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/swagger": {
+      get: {
+        summary: "Swagger UI Arayüzü",
+        description: "İnteraktif Swagger API dokümantasyon ekranı.",
+        responses: {
+          "200": {
+            description: "Swagger UI HTML sayfası"
+          }
+        }
+      }
+    }
+  }
+};
+
+// GET /api/swagger/doc.json → İstenirse ham OpenAPI JSON dokümantasyonunu döner
+app.get('/api/swagger/doc.json', (req, res) => {
+  res.status(200).json(swaggerDocument);
+});
+
+// Swagger UI arayüzü (/api/swagger üzerinden görsel ve test edilebilir arayüz sunar)
+app.use('/api/swagger', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.listen(PORT, () => {
   console.log(`Sunucu ${PORT} portunda çalışıyor: http://localhost:${PORT}`);
