@@ -96,6 +96,7 @@ const swaggerDocument = {
   paths: {
     "/api/health": {
       get: {
+        tags: ["Health"],
         summary: "Sunucu sağlık kontrolü",
         description: "API sunucusunun çalışıp çalışmadığını kontrol eder.",
         responses: {
@@ -112,7 +113,8 @@ const swaggerDocument = {
     },
     "/api/users": {
       get: {
-        summary: "Tüm kullanıcıları listeler",
+        tags: ["ApiUser"],
+        summary: "Tüm kullanıcıları listeler (ApiUser)",
         description: "apiUserRoutes ve apiUserController üzerinden mevcut tüm kullanıcıları dizi olarak döner.",
         responses: {
           "200": {
@@ -128,7 +130,8 @@ const swaggerDocument = {
         }
       },
       post: {
-        summary: "Yeni bir kullanıcı oluşturur",
+        tags: ["ApiUser"],
+        summary: "Yeni bir kullanıcı oluşturur (ApiUser)",
         description: "apiUserRoutes ve apiUserController üzerinden yeni bir kullanıcı ekler ve otomatik artan ID ile döner.",
         requestBody: {
           required: true,
@@ -159,7 +162,8 @@ const swaggerDocument = {
     },
     "/api/users/{id}": {
       get: {
-        summary: "ID'ye göre kullanıcı getirir",
+        tags: ["ApiUser"],
+        summary: "ID'ye göre kullanıcı getirir (ApiUser)",
         parameters: [
           {
             name: "id",
@@ -189,7 +193,8 @@ const swaggerDocument = {
         }
       },
       put: {
-        summary: "Kullanıcı bilgilerini tamamen günceller",
+        tags: ["ApiUser"],
+        summary: "Kullanıcı bilgilerini tamamen günceller (ApiUser)",
         description: "Mevcut kullanıcının tüm bilgilerini değiştirir (ID korunur).",
         parameters: [
           {
@@ -235,7 +240,8 @@ const swaggerDocument = {
         }
       },
       patch: {
-        summary: "Kullanıcının belirtilen alanlarını kısmi olarak günceller",
+        tags: ["ApiUser"],
+        summary: "Kullanıcının belirtilen alanlarını kısmi olarak günceller (ApiUser)",
         description: "Yalnızca gönderilen alanlar güncellenir, diğer alanlar ve ID korunur.",
         parameters: [
           {
@@ -280,7 +286,208 @@ const swaggerDocument = {
         }
       },
       delete: {
-        summary: "Kullanıcıyı siler",
+        tags: ["ApiUser"],
+        summary: "Kullanıcıyı siler (ApiUser)",
+        description: "Belirtilen ID'ye sahip kullanıcıyı diziden siler.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Silinecek kullanıcının ID'si"
+          }
+        ],
+        responses: {
+          "204": { description: "Kullanıcı başarıyla silindi (İçerik yok)" },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users": {
+      get: {
+        tags: ["User"],
+        summary: "Tüm kullanıcıları listeler (User)",
+        description: "userRoutes ve userController üzerinden mevcut tüm kullanıcıları dizi olarak döner.",
+        responses: {
+          "200": {
+            description: "Kullanıcı listesi",
+            content: {
+              "application/json": {
+                example: [
+                  { id: 1, name: "Esra Sahin", email: "esra@ogr.iu.edu.tr" }
+                ]
+              }
+            }
+          }
+        }
+      },
+      post: {
+        tags: ["User"],
+        summary: "Yeni bir kullanıcı oluşturur (User)",
+        description: "userRoutes ve userController üzerinden yeni bir kullanıcı ekler ve otomatik artan ID ile döner.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string", example: "Esra Sahin" },
+                  email: { type: "string", example: "esra@ogr.iu.edu.tr" }
+                },
+                required: ["name", "email"]
+              }
+            }
+          }
+        },
+        responses: {
+          "201": {
+            description: "Kullanıcı başarıyla oluşturuldu",
+            content: {
+              "application/json": {
+                example: { id: 1, name: "Esra Sahin", email: "esra@ogr.iu.edu.tr" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      get: {
+        tags: ["User"],
+        summary: "ID'ye göre kullanıcı getirir (User)",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Getirilmek istenen kullanıcının ID'si"
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Kullanıcı bulundu",
+            content: {
+              "application/json": {
+                example: { id: 1, name: "Esra Sahin", email: "esra@ogr.iu.edu.tr" }
+              }
+            }
+          },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      put: {
+        tags: ["User"],
+        summary: "Kullanıcı bilgilerini tamamen günceller (User)",
+        description: "Mevcut kullanıcının tüm bilgilerini değiştirir (ID korunur).",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Güncellenecek kullanıcının ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string", example: "Esra Yeni" },
+                  email: { type: "string", example: "esrayeni@ogr.iu.edu.tr" }
+                },
+                required: ["name", "email"]
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Kullanıcı başarıyla güncellendi",
+            content: {
+              "application/json": {
+                example: { id: 1, name: "Esra Yeni", email: "esrayeni@ogr.iu.edu.tr" }
+              }
+            }
+          },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      patch: {
+        tags: ["User"],
+        summary: "Kullanıcının belirtilen alanlarını kısmi olarak günceller (User)",
+        description: "Yalnızca gönderilen alanlar güncellenir, diğer alanlar ve ID korunur.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Kısmi güncellenecek kullanıcının ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string", example: "Esra Guncel" },
+                  email: { type: "string", example: "esra@ogr.iu.edu.tr" }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Kullanıcı kısmi olarak güncellendi",
+            content: {
+              "application/json": {
+                example: { id: 1, name: "Esra Guncel", email: "esra@ogr.iu.edu.tr" }
+              }
+            }
+          },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      delete: {
+        tags: ["User"],
+        summary: "Kullanıcıyı siler (User)",
         description: "Belirtilen ID'ye sahip kullanıcıyı diziden siler.",
         parameters: [
           {
@@ -306,6 +513,7 @@ const swaggerDocument = {
     },
     "/api/swagger": {
       get: {
+        tags: ["Swagger"],
         summary: "Swagger UI Arayüzü",
         description: "İnteraktif Swagger API dokümantasyon ekranı.",
         responses: {
