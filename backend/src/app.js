@@ -2,14 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const alumniRoutes = require('./routes/alumniRoutes');
-const {
-  getAllUsers,
-  getUserById,
-  createUser,
-  updateUser,
-  patchUser,
-  deleteUser
-} = require('./models/userModel');
+const apiUserController = require('./controllers/apiUserController');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -83,62 +76,13 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-// POST /api/users → Request body'den gelen kullanıcı bilgisini alır, Model ile oluşturur ve JSON olarak döner
-app.post('/api/users', (req, res) => {
-  const newUser = createUser(req.body);
-  res.status(201).json(newUser);
-});
-
-// GET /api/users → Eklenen tüm kullanıcıları Model üzerinden JSON listesi olarak döner
-app.get('/api/users', (req, res) => {
-  const users = getAllUsers();
-  res.status(200).json(users);
-});
-
-// GET /api/users/:id → ID'ye göre tek bir kullanıcıyı Model üzerinden getirir (Bulunamazsa 404 döner)
-app.get('/api/users/:id', (req, res) => {
-  const user = getUserById(req.params.id);
-
-  if (!user) {
-    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
-  }
-
-  res.status(200).json(user);
-});
-
-// PUT /api/users/:id → Belirtilen kullanıcının tüm bilgilerini Model üzerinden günceller (ID korunur)
-app.put('/api/users/:id', (req, res) => {
-  const updatedUser = updateUser(req.params.id, req.body);
-
-  if (!updatedUser) {
-    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
-  }
-
-  res.status(200).json(updatedUser);
-});
-
-// PATCH /api/users/:id → Belirtilen kullanıcının sadece gönderilen alanlarını Model üzerinden kısmi günceller
-app.patch('/api/users/:id', (req, res) => {
-  const updatedUser = patchUser(req.params.id, req.body);
-
-  if (!updatedUser) {
-    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
-  }
-
-  res.status(200).json(updatedUser);
-});
-
-// DELETE /api/users/:id → Belirtilen ID'deki kullanıcıyı Model üzerinden siler
-app.delete('/api/users/:id', (req, res) => {
-  const isDeleted = deleteUser(req.params.id);
-
-  if (!isDeleted) {
-    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
-  }
-
-  // Başarılı silme durumunda 204 No Content döner
-  res.status(204).send();
-});
+// User API CRUD rotaları (apiUserController üzerinden yönetilir)
+app.post('/api/users', apiUserController.createUser);
+app.get('/api/users', apiUserController.getUsers);
+app.get('/api/users/:id', apiUserController.getUser);
+app.put('/api/users/:id', apiUserController.updateUser);
+app.patch('/api/users/:id', apiUserController.patchUser);
+app.delete('/api/users/:id', apiUserController.deleteUser);
 
 // Swagger / OpenAPI 3.0 Dokümantasyonu
 const swaggerDocument = {
