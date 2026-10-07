@@ -1,16 +1,26 @@
 const userModel = require('../models/userModel');
+const userView = require('../views/userView');
 
 /**
- * Controller: User işlemlerini ve iş mantığını yönetir
+ * Controller: User işlemlerini ve iş mantığını yönetir (View Layer entegrasyonlu)
  */
 
 /**
- * GET /users (veya tüm kullanıcıları listeleme)
- * Tüm kullanıcıları döner.
+ * GET /users (Kullanıcı Listesi - View Layer)
+ * Model'den kullanıcıları alır ve View Layer ile HTML olarak render eder.
  */
 const getUsers = (req, res) => {
   const users = userModel.getAllUsers();
-  res.status(200).json(users);
+
+  // İstemci açıkça sadece JSON talep ederse (API istemcileri için esneklik)
+  if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    return res.status(200).json(users);
+  }
+
+  // Varsayılan: View Layer üzerinden HTML sayfası render edilir
+  const html = userView.renderUsersPage(users);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(html);
 };
 
 /**
@@ -28,12 +38,21 @@ const getUser = (req, res) => {
 };
 
 /**
- * POST /users
- * Yeni bir kullanıcı oluşturur.
+ * POST /users (Yeni Kullanıcı Oluşturma - View Layer)
+ * Model üzerinden yeni kullanıcı oluşturur ve View Layer ile HTML sonucu gösterir.
  */
 const createUser = (req, res) => {
   const newUser = userModel.createUser(req.body);
-  res.status(201).json(newUser);
+
+  // İstemci açıkça sadece JSON talep ederse (API istemcileri için esneklik)
+  if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    return res.status(201).json(newUser);
+  }
+
+  // Varsayılan: View Layer üzerinden HTML başarı sayfası render edilir
+  const html = userView.renderUserCreatedPage(newUser);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(201).send(html);
 };
 
 /**
