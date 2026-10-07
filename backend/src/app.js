@@ -2,6 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const alumniRoutes = require('./routes/alumniRoutes');
+const {
+  getAllUsers,
+  getUserById,
+  createUser,
+  updateUser,
+  patchUser,
+  deleteUser
+} = require('./models/userModel');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -75,29 +83,21 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-// Database kullanılmadığı için kullanıcıları bellekte tutan dizi (in-memory)
-const users = [];
-
-// POST /api/users → Request body'den gelen kullanıcı bilgisini alır, ID atar ve JSON olarak geri döndürür
+// POST /api/users → Request body'den gelen kullanıcı bilgisini alır, Model ile oluşturur ve JSON olarak döner
 app.post('/api/users', (req, res) => {
-  const newUser = {
-    id: req.body.id ? Number(req.body.id) : users.length + 1,
-    ...req.body
-  };
-  newUser.id = Number(newUser.id);
-  users.push(newUser);
+  const newUser = createUser(req.body);
   res.status(201).json(newUser);
 });
 
-// GET /api/users → Eklenen tüm kullanıcıları JSON listesi olarak döner
+// GET /api/users → Eklenen tüm kullanıcıları Model üzerinden JSON listesi olarak döner
 app.get('/api/users', (req, res) => {
+  const users = getAllUsers();
   res.status(200).json(users);
 });
 
-// GET /api/users/:id → ID'ye göre tek bir kullanıcıyı getirir (Bulunamazsa 404 döner)
+// GET /api/users/:id → ID'ye göre tek bir kullanıcıyı Model üzerinden getirir (Bulunamazsa 404 döner)
 app.get('/api/users/:id', (req, res) => {
-  const userId = Number(req.params.id);
-  const user = users.find(u => u.id === userId);
+  const user = getUserById(req.params.id);
 
   if (!user) {
     return res.status(404).json({ message: "Kullanıcı bulunamadı" });
@@ -106,57 +106,35 @@ app.get('/api/users/:id', (req, res) => {
   res.status(200).json(user);
 });
 
-// PUT /api/users/:id → Belirtilen kullanıcının tüm bilgilerini günceller (ID korunur)
+// PUT /api/users/:id → Belirtilen kullanıcının tüm bilgilerini Model üzerinden günceller (ID korunur)
 app.put('/api/users/:id', (req, res) => {
-  const userId = Number(req.params.id);
-  const userIndex = users.findIndex(u => u.id === userId);
+  const updatedUser = updateUser(req.params.id, req.body);
 
-  if (userIndex === -1) {
+  if (!updatedUser) {
     return res.status(404).json({ message: "Kullanıcı bulunamadı" });
   }
 
-  // Kullanıcıyı yeni body ile tamamen değiştir, URL'deki id'yi koru
-  const updatedUser = {
-    id: userId,
-    ...req.body
-  };
-  updatedUser.id = userId; // Request body'de id olsa bile URL'deki id esas alınır
-
-  users[userIndex] = updatedUser;
   res.status(200).json(updatedUser);
 });
 
-// PATCH /api/users/:id → Belirtilen kullanıcının sadece gönderilen alanlarını kısmi olarak günceller
+// PATCH /api/users/:id → Belirtilen kullanıcının sadece gönderilen alanlarını Model üzerinden kısmi günceller
 app.patch('/api/users/:id', (req, res) => {
-  const userId = Number(req.params.id);
-  const userIndex = users.findIndex(u => u.id === userId);
+  const updatedUser = patchUser(req.params.id, req.body);
 
-  if (userIndex === -1) {
+  if (!updatedUser) {
     return res.status(404).json({ message: "Kullanıcı bulunamadı" });
   }
 
-  // Mevcut verileri koru, sadece gelen alanları güncelle, id'yi koru
-  const updatedUser = {
-    ...users[userIndex],
-    ...req.body,
-    id: userId
-  };
-
-  users[userIndex] = updatedUser;
   res.status(200).json(updatedUser);
 });
 
-// DELETE /api/users/:id → Belirtilen ID'deki kullanıcıyı siler
+// DELETE /api/users/:id → Belirtilen ID'deki kullanıcıyı Model üzerinden siler
 app.delete('/api/users/:id', (req, res) => {
-  const userId = Number(req.params.id);
-  const userIndex = users.findIndex(u => u.id === userId);
+  const isDeleted = deleteUser(req.params.id);
 
-  if (userIndex === -1) {
+  if (!isDeleted) {
     return res.status(404).json({ message: "Kullanıcı bulunamadı" });
   }
-
-  // Kullanıcıyı diziden sil
-  users.splice(userIndex, 1);
 
   // Başarılı silme durumunda 204 No Content döner
   res.status(204).send();
