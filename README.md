@@ -93,8 +93,10 @@ alumni/
 ├── backend/
 │   ├── src/
 │   │   ├── controllers/      # İstek kontrolcüleri ve iş mantığı
-│   │   ├── routes/           # API rota tanımlamaları
-│   │   └── app.js            # Express sunucusu, rotalar ve Swagger konfigürasyonu
+│   │   ├── models/           # Veri modelleri ve in-memory veri yönetimi
+│   │   ├── routes/           # API ve web rota tanımlamaları
+│   │   ├── views/            # HTML arayüz ve sayfa şablonları
+│   │   └── app.js            # Express sunucusu, ara katmanlar ve Swagger konfigürasyonu
 │   ├── package.json          # Proje bağımlılıkları ve script'ler
 │   └── package-lock.json
 └── README.md                 # Proje dokümantasyonu ve API kılavuzu
@@ -106,172 +108,177 @@ alumni/
 
 This section documents the architectural structure of the **Alumni Tracking System** project for the course assignment (*"Document MVC architecture of your app and write it in README. Directories, folders, files"*).
 
-> **Architectural Status:** This application is currently an early-stage REST API and **does not follow a fully decoupled classic MVC (Model-View-Controller) architecture**. Core responsibilities (routing, controller business logic, and in-memory data management) are largely co-located within `backend/src/app.js`.
+The project implements a decoupled, modular **MVC (Model-View-Controller)** architecture for its User management and Alumni tracking features. The responsibilities are clearly separated across dedicated directories under `backend/src/`.
 
 ---
 
 ### 1. Project Directory & File Structure
 
-Below is the actual file and directory structure of the repository (excluding `node_modules` and `.git`):
+Below is the current directory and file layout of `backend/src/`:
 
 ```text
-alumni/
-├── backend/
-│   ├── src/
-│   │   ├── controllers/
-│   │   │   └── alumniController.js   # Alumni controller function
-│   │   ├── routes/
-│   │   │   └── alumniRoutes.js       # Alumni route definitions
-│   │   └── app.js                    # Main server file, inline routes, inline handlers, and in-memory store
-│   ├── package.json                  # Backend dependencies and scripts
-│   └── package-lock.json             # Exact dependency lockfile
-└── README.md                         # Project documentation
+backend/src/
+├── controllers/
+│   ├── alumniController.js
+│   ├── userController.js
+│   └── apiUserController.js
+│
+├── models/
+│   └── userModel.js
+│
+├── routes/
+│   ├── alumniRoutes.js
+│   ├── userRoutes.js
+│   └── apiUserRoutes.js
+│
+├── views/
+│   ├── userView.js
+│   └── apiUserView.js
+│
+└── app.js
 ```
 
-* **Actual directories present:** `backend/src/controllers`, `backend/src/routes`.
-* **Missing MVC directories:** There is currently **no `models/` folder** and **no `views/` folder**.
+#### Layer Responsibilities:
+* **`controllers/`**: Receives incoming requests from the route layer, executes business logic, coordinates with the model layer, and returns formatted HTML views or JSON responses.
+* **`models/`**: Manages the data layer, encapsulating data storage and direct CRUD manipulation functions.
+* **`routes/`**: Defines HTTP route definitions (verbs and path patterns) and maps incoming requests to their respective controller handler functions.
+* **`views/`**: Renders dynamic, accessible, and sanitized HTML templates for browser presentation.
+* **`app.js`**: Serves as the central server entry point; configures global middleware (CORS, body parsers), mounts the route modules, sets up OpenAPI/Swagger UI documentation, and starts the HTTP listener.
 
 ---
 
-### 2. Routes
+### 2. Model Layer (`models/userModel.js`)
 
-Routes in this project are split between a dedicated route file and inline route handlers inside `app.js`:
-
-#### A. Dedicated Route File (`backend/src/routes/alumniRoutes.js`)
-Mounted in `app.js` using `app.use('/alumni', alumniRoutes)`:
-* **`GET /alumni`** (defined as `router.get('/')` inside `alumniRoutes.js`): Delegates request handling directly to `alumniController.getAlumni`.
-
-#### B. Direct Routes Defined in `backend/src/app.js`
-The majority of endpoints are declared directly in `app.js` using Express application routing:
-
-* **Static / Informational Endpoints:**
-  * **`GET /`**: Serves a basic inline HTML page ("Temporary One Main Page").
-  * **`GET /hello`**: Returns plain text `"Hello World!"`.
-  * **`GET /hello/esra`**: Returns plain text `"Hello Esra"`.
-  * **`GET /sum/:number1/:number2`**: Computes and returns the arithmetic sum of two route parameters.
-  * **`GET /about`**: Serves an inline HTML page ("Temporary About Page").
-  * **`GET /ok`**: Returns plain text `"ok"`.
-  * **`GET /api/health` & `GET /health`**: Returns server health status JSON `{ "status": "ok" }`.
-
-* **User CRUD API Endpoints:**
-  * **`POST /api/users`**: Creates a new user with an auto-incremented ID and returns `201 Created`.
-  * **`GET /api/users`**: Returns the list of all users in memory as JSON (`200 OK`).
-  * **`GET /api/users/:id`**: Finds a user by ID; returns `200 OK` or `404 Not Found`.
-  * **`PUT /api/users/:id`**: Replaces all user fields while preserving the ID; returns `200 OK` or `404 Not Found`.
-  * **`PATCH /api/users/:id`**: Partially updates specific fields of a user; returns `200 OK` or `404 Not Found`.
-  * **`DELETE /api/users/:id`**: Deletes a user by ID; returns `204 No Content` or `404 Not Found`.
-
-* **Documentation Endpoints:**
-  * **`GET /api/swagger/doc.json`**: Serves the raw OpenAPI 3.0 specification JSON object.
-  * **`USE /api/swagger`**: Serves the interactive Swagger UI documentation.
+* **In-Memory Data Storage:**  
+  User data is stored in server memory using a native JavaScript array (`users = []`). No external database connection (such as PostgreSQL, MySQL, or MongoDB) is currently used.
+* **Provided CRUD Functions:**  
+  The model exposes the following functions to manage user records:
+  * **`getAllUsers()`**: Returns the full array of existing users.
+  * **`getUserById(id)`**: Searches and returns a single user matching the numeric ID (or `null` if not found).
+  * **`createUser(userData)`**: Assigns an auto-incrementing ID (`users.length + 1` if not provided) and appends the new user record to the array.
+  * **`updateUser(id, userData, isPartial = false)`**: Replaces user details while preserving the unique user ID (full replacement for PUT, partial merge for PATCH).
+  * **`patchUser(id, partialData)`**: Partially updates specific fields of a user without modifying untouched fields.
+  * **`deleteUser(id)`**: Removes the user record with the specified ID from the array and returns a boolean success status.
 
 ---
 
-### 3. Model (Data Layer)
+### 3. Controller Layer (`controllers/`)
 
-* **Does a Model layer exist?**  
-  **No.** There is no dedicated `models/` directory or model schema files (e.g., `userModel.js`) in the codebase.
-* **Where and how data is stored:**  
-  User data is stored directly in server memory using a plain JavaScript array inside `backend/src/app.js`:
-  ```javascript
-  const users = [];
-  ```
-* **Data Management:**  
-  All CRUD operations are performed directly on this in-memory array using standard array methods (`push()`, `find()`, `findIndex()`, `splice()`) inside the callback functions of `app.js`.
-* **Persistence:**  
-  There is no persistent database (e.g., PostgreSQL, MongoDB, MySQL) and no ORM/ODM (e.g., Prisma, Sequelize, Mongoose). All data is stored in RAM and is reset when the server restarts.
+The controller layer encapsulates application workflows and orchestrates communication between routes, models, and views:
 
----
-
-### 4. Controller (Business Logic Layer)
-
-* **Do controller files exist?**  
-  **Partially.** A controller directory exists (`backend/src/controllers/`) containing:
-  * `alumniController.js`: Defines `getAlumni` which returns HTTP 200 with `'OK'`.
-* **Where request handling is implemented:**  
-  For the primary data entity—the User CRUD endpoints (`/api/users`)—there is **no separate controller file** (e.g., no `userController.js`).  
-  All request parsing (`req.body`, `req.params`), business logic, and HTTP response handling are written as inline callback functions directly in `backend/src/app.js`.
+* **`userController.js`:**
+  * Handles requests sent to the **`/users`** route.
+  * Implements all CRUD controller functions: `getUsers`, `getUser`, `createUser`, `updateUser`, `patchUser`, and `deleteUser`.
+  * Integrates with [userView.js](file:///c:/Users/akema/Desktop/alumni/backend/src/views/userView.js) to return rich HTML view responses for browser users, with fallback JSON responses when explicitly requested via `Accept: application/json`.
+* **`apiUserController.js`:**
+  * Handles requests sent to the **`/api/users`** route.
+  * Implements all CRUD controller functions: `getUsers`, `getUser`, `createUser`, `updateUser`, `patchUser`, and `deleteUser`.
+  * Primarily focused on REST API clients, returning standard JSON responses with appropriate HTTP status codes (200, 201, 204, 404), while also supporting web view dashboards via [apiUserView.js](file:///c:/Users/akema/Desktop/alumni/backend/src/views/apiUserView.js).
+* **`alumniController.js`:**
+  * Handles requests for the alumni route (`GET /alumni`) and returns the base status response.
 
 ---
 
-### 5. View (Presentation Layer)
+### 4. Route Layer (`routes/`)
 
-* **Does a View layer exist?**  
-  **No.** There is no dedicated `views/` directory, no server-side template engine configured (e.g., EJS, Pug, Handlebars), and no frontend framework folder.
-* **Current Presentation Mechanism:**  
-  * The application primarily acts as a **RESTful JSON API**, returning structured JSON data via `res.json()`.
-  * Minimal HTML is served by two endpoints (`GET /` and `GET /about`), which return inline HTML string templates directly via `res.send()` with `Content-Type: text/html`.
-  * An interactive visual interface is also provided by the Swagger UI middleware at `/api/swagger`.
+The route layer maps incoming HTTP methods and URL paths to their corresponding controller functions without containing inline business logic:
+
+* **`userRoutes.js` (mounted at `/users`):**
+  * `router.get('/', userController.getUsers)`
+  * `router.post('/', userController.createUser)`
+  * `router.get('/:id', userController.getUser)`
+  * `router.put('/:id', userController.updateUser)`
+  * `router.patch('/:id', userController.patchUser)`
+  * `router.delete('/:id', userController.deleteUser)`
+* **`apiUserRoutes.js` (mounted at `/api/users`):**
+  * `router.get('/', apiUserController.getUsers)`
+  * `router.post('/', apiUserController.createUser)`
+  * `router.get('/:id', apiUserController.getUser)`
+  * `router.put('/:id', apiUserController.updateUser)`
+  * `router.patch('/:id', apiUserController.patchUser)`
+  * `router.delete('/:id', apiUserController.deleteUser)`
+* **`alumniRoutes.js` (mounted at `/alumni`):**
+  * `router.get('/', alumniController.getAlumni)`
+
+Each router file cleanly delegates execution directly to its respective controller.
+
+---
+
+### 5. View Layer (`views/`)
+
+The presentation layer is implemented through modular view rendering files using native JavaScript template literals. **No external template engine (such as EJS, Pug, or Handlebars) is used**, keeping the project lightweight and dependency-free:
+
+* **`userView.js`:**
+  * Generates the complete HTML interface for the `/users` endpoint.
+  * Powers the interactive **User Management** screen with full CRUD support:
+    * **Create**: "Create New User" section with Name and Email inputs and an "Add User" button (`POST /users`).
+    * **Read (List)**: Structured user table with `ID`, `Name`, `Email`, and `Actions` columns.
+    * **Read (Details)**: Dedicated user detail page displaying all information for a specific user (`GET /users/:id`).
+    * **Update (Edit)**: In-page editing functionality that populates the form, transitions to "Edit User (#id)", and dispatches `PUT /users/:id` requests to `userController.updateUser`.
+    * **Delete**: Delete button triggering confirmed `DELETE /users/:id` requests to `userController.deleteUser` and updating the user list.
+  * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
+* **`apiUserView.js`:**
+  * Provides complementary HTML view templates and dashboards for the `/api/users` endpoints.
 
 ---
 
 ### 6. MVC Request Flow
 
-Because the project is not yet fully separated into traditional MVC layers, the request flow differs depending on the endpoint:
+The application executes requests through decoupled, end-to-end MVC flows:
 
-#### A. Modular Flow (`/alumni`)
-This endpoint follows a decoupled Route-to-Controller structure:
+#### A. Web View Flow (`/users`)
 ```text
-Client Request (GET /alumni)
+Client Request (Browser)
        │
        ▼
-Express App (app.js)
+   app.js (Route Mounting & Middleware)
        │
        ▼
-Router (backend/src/routes/alumniRoutes.js)
+userRoutes.js (Endpoint Matching: GET, POST, PUT, DELETE)
        │
        ▼
-Controller (backend/src/controllers/alumniController.js -> getAlumni)
+userController.js (Request Parsing & Business Logic)
        │
        ▼
-HTTP Response ("OK")
+  userModel.js (In-Memory Array Operations)
+       │
+       ▼
+  userView.js (HTML Template Rendering & XSS Escaping)
+       │
+       ▼
+ HTML Response (Rendered Page in Browser)
 ```
 
-#### B. Inline Flow (`/api/users`)
-This endpoint combines routing, controller logic, and data storage in `app.js`:
+#### B. REST API Flow (`/api/users`)
 ```text
-Client Request (e.g., POST /api/users)
+Client Request (API Client / Swagger)
        │
        ▼
-Express App (app.js) [Acts as Router]
+   app.js (Route Mounting & Middleware)
        │
        ▼
-Inline Handler in app.js [Acts as Controller]
+apiUserRoutes.js (Endpoint Matching)
        │
        ▼
-In-Memory 'users' Array in app.js [Acts as Model / Data Store]
+apiUserController.js (Request Parsing & Validation)
        │
        ▼
-JSON Response (e.g., 201 Created with User JSON)
-```
-
-#### C. Inline View Flow (`GET /` and `GET /about`)
-```text
-Client Request (GET /)
+  userModel.js (In-Memory Array Operations)
        │
        ▼
-Inline Handler in app.js
-       │
-       ▼
-Inline HTML String Template [Acts as Minimal View]
-       │
-       ▼
-HTML Response (text/html)
+ JSON Response ({ id: 1, name: "...", email: "..." })
 ```
 
 ---
 
-### 7. Architectural Assessment & Future Improvements
+### 7. Current Architecture Assessment
 
-#### Current Architecture Assessment:
-1. **High Coupling in `app.js`:** Currently, `app.js` handles multiple distinct responsibilities: Express app setup, middleware registration, route definitions, controller logic for users, in-memory data storage, and OpenAPI documentation schema.
-2. **Emerging MVC Separation:** The creation of `alumniRoutes.js` and `alumniController.js` establishes the foundation for MVC separation, but it currently only applies to the `/alumni` route.
-
-#### Future Separation (When Database is Introduced - Theoretical Plan):
-To transform this into a clean, decoupled MVC architecture without changing application behavior:
-* **Model Layer:** Create a `models/` folder (e.g., `models/userModel.js`) to define database schemas (e.g., PostgreSQL/MongoDB), handle database queries, and encapsulate data validation.
-* **Controller Layer:** Create `controllers/userController.js` and move the inline handlers from `app.js` into modular methods (`getAllUsers`, `getUserById`, `createUser`, `updateUser`, `deleteUser`).
-* **Route Layer:** Create `routes/userRoutes.js` to map endpoints (`/api/users`) cleanly to their corresponding controller methods.
-* **View Layer:** Keep the backend as a decoupled RESTful JSON API to serve a modern client frontend (e.g., React, Vue), or add a `views/` directory with a template engine if server-side rendering is desired.
-* **Clean Entry Point:** `app.js` will then only be responsible for initializing middleware, mounting route modules (`app.use('/api/users', userRoutes)`), and starting the HTTP server.
+* **Modular MVC Structure:** The application now fully follows a modular, decoupled MVC-style architecture for all User operations. Model, View, Controller, and Route responsibilities are cleanly isolated into dedicated files and directories.
+* **Separation of Concerns in `app.js`:** User CRUD and data management logic no longer reside inside `app.js`. `app.js` now serves strictly as the application entry point responsible for:
+  * Initializing the Express instance.
+  * Registering global middleware (`cors`, `express.json`, `express.urlencoded`).
+  * Mounting route modules (`app.use('/users', userRoutes)`, `app.use('/api/users', apiUserRoutes)`, `app.use('/alumni', alumniRoutes)`).
+  * Configuring OpenAPI 3.0 specifications and serving Swagger UI (`/api/swagger`).
+  * Starting the HTTP server on the configured port.
+* **Database Readiness:** By encapsulating all data operations in `models/userModel.js`, the application is well-prepared to integrate persistent databases (e.g., PostgreSQL, MongoDB) or ORMs in future iterations without altering controller, route, or view implementations.
 
