@@ -148,6 +148,9 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
     .btn-secondary:hover { background-color: #e2e8f0; }
     .btn-danger { background-color: #e53e3e; color: #fff; }
     .btn-danger:hover { background-color: #c53030; }
+    .btn-warning { background-color: #dd6b20; color: #fff; }
+    .btn-warning:hover { background-color: #c05621; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
     .info-item {
       margin: 10px 0;
       font-size: 15px;
@@ -169,42 +172,59 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
 </html>`;
 
 /**
- * 1. GET /users: Tüm kullanıcıları listeler (Read - R)
+ * 1. GET /users: Tüm kullanıcıları listeler (Read - R) ve User Management CRUD işlemlerini sunar
  */
 const renderUsersPage = (users = []) => {
   const userRows = users.length > 0
     ? users.map(user => `
       <tr>
         <td><strong>#${user.id}</strong></td>
-        <td><a href="/users/${user.id}" style="color:#2b6cb0; text-decoration:none; font-weight:600;">${escapeHtml(user.name)}</a></td>
+        <td>${escapeHtml(user.name)}</td>
         <td>${escapeHtml(user.email)}</td>
-        <td>${escapeHtml(user.role || user.department || '-')}</td>
-        <td>
-          <a href="/users/${user.id}" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">Görüntüle</a>
+        <td style="white-space: nowrap;">
+          <a href="/users/${user.id}" class="btn btn-secondary btn-sm" style="margin-right: 4px;">Details</a>
+          <button type="button" class="btn btn-warning btn-sm" style="margin-right: 4px;" onclick="startEdit(this)" data-id="${user.id}" data-name="${escapeHtml(user.name)}" data-email="${escapeHtml(user.email)}">Edit</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">Delete</button>
         </td>
       </tr>
     `).join('')
     : `
       <tr>
-        <td colspan="5" style="text-align: center; color: #777; padding: 24px;">
+        <td colspan="4" style="text-align: center; color: #777; padding: 24px;">
           Henüz kayıtlı kullanıcı bulunmamaktadır.
         </td>
       </tr>
     `;
 
   const content = `
-    <h1>🎓 Kullanıcı Listesi <span class="badge">User View Layer</span></h1>
-    <p>Bu sayfa MVC mimarisindeki <strong>View Layer</strong> kullanılarak sunulmaktadır (CRUD: Read).</p>
+    <h1>👥 User Management</h1>
+    <p>Manage users and perform CRUD operations with User View.</p>
 
-    <h2>📋 Kayıtlı Kullanıcılar (${users.length})</h2>
+    <div class="card" id="userFormCard" style="margin-bottom: 28px;">
+      <h2 id="formTitle" style="margin-top: 0;">➕ Create New User</h2>
+      <form id="userForm" action="/users" method="POST">
+        <input type="hidden" id="userId" value="">
+        <div class="form-group">
+          <label for="name">Name:</label>
+          <input type="text" id="name" name="name" required placeholder="Enter full name">
+        </div>
+        <div class="form-group">
+          <label for="email">Email:</label>
+          <input type="email" id="email" name="email" required placeholder="Enter email address">
+        </div>
+        <button type="submit" id="submitBtn" class="btn">Add User</button>
+        <button type="button" id="cancelBtn" class="btn btn-secondary" style="display: none; margin-left: 8px;" onclick="resetForm()">Cancel</button>
+      </form>
+    </div>
+
+    <h2>📋 User List (${users.length})</h2>
     <table>
       <thead>
         <tr>
-          <th>ID</th>
-          <th>İsim</th>
-          <th>E-posta</th>
-          <th>Detay / Rol</th>
-          <th>İşlem</th>
+          <th style="width: 80px;">ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th style="width: 220px;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -212,23 +232,87 @@ const renderUsersPage = (users = []) => {
       </tbody>
     </table>
 
-    <div class="card" style="margin-top: 32px;">
-      <h2>➕ Yeni Kullanıcı Ekle (POST /users - Create)</h2>
-      <form action="/users" method="POST">
-        <div class="form-group">
-          <label for="name">Adı ve Soyadı:</label>
-          <input type="text" id="name" name="name" required placeholder="Örn: Esra Şahin">
-        </div>
-        <div class="form-group">
-          <label for="email">E-posta Adresi:</label>
-          <input type="email" id="email" name="email" required placeholder="Örn: esra@ogr.iu.edu.tr">
-        </div>
-        <button type="submit" class="btn">Kullanıcıyı Kaydet</button>
-      </form>
-    </div>
+    <script>
+      function startEdit(button) {
+        var id = button.getAttribute('data-id');
+        var name = button.getAttribute('data-name');
+        var email = button.getAttribute('data-email');
+
+        document.getElementById('formTitle').innerText = '✏️ Edit User (#' + id + ')';
+        document.getElementById('userId').value = id;
+        document.getElementById('name').value = name;
+        document.getElementById('email').value = email;
+        document.getElementById('submitBtn').innerText = 'Update User';
+        document.getElementById('cancelBtn').style.display = 'inline-block';
+
+        var card = document.getElementById('userFormCard');
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth' });
+        }
+        document.getElementById('name').focus();
+      }
+
+      function resetForm() {
+        document.getElementById('formTitle').innerText = '➕ Create New User';
+        document.getElementById('userId').value = '';
+        document.getElementById('userForm').reset();
+        document.getElementById('submitBtn').innerText = 'Add User';
+        document.getElementById('cancelBtn').style.display = 'none';
+      }
+
+      function deleteUser(id) {
+        if (confirm('Are you sure you want to delete user #' + id + '?')) {
+          fetch('/users/' + id, {
+            method: 'DELETE'
+          })
+          .then(function(res) {
+            if (res.ok) {
+              window.location.reload();
+            } else {
+              alert('Failed to delete user #' + id);
+            }
+          })
+          .catch(function(err) {
+            alert('Error: ' + err.message);
+          });
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        var form = document.getElementById('userForm');
+        if (!form) return;
+
+        form.addEventListener('submit', function(e) {
+          var userId = document.getElementById('userId').value;
+          if (userId) {
+            e.preventDefault();
+            var name = document.getElementById('name').value.trim();
+            var email = document.getElementById('email').value.trim();
+
+            fetch('/users/' + userId, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ name: name, email: email })
+            })
+            .then(function(res) {
+              if (res.ok) {
+                window.location.reload();
+              } else {
+                alert('Failed to update user #' + userId);
+              }
+            })
+            .catch(function(err) {
+              alert('Error: ' + err.message);
+            });
+          }
+        });
+      });
+    </script>
   `;
 
-  return getLayout("Kullanıcı Listesi", "User View Layer", content);
+  return getLayout("User Management", "User View Layer", content);
 };
 
 /**
