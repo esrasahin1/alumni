@@ -27,14 +27,29 @@ const getUsers = (req, res) => {
  * GET /users/:id
  * ID'ye göre tek bir kullanıcıyı getirir.
  */
+/**
+ * GET /users/:id (Kullanıcı Detayı - View Layer)
+ * ID'ye göre tek bir kullanıcıyı getirir.
+ */
 const getUser = (req, res) => {
   const user = userModel.getUserById(req.params.id);
 
   if (!user) {
-    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    const html = userView.renderUserNotFoundPage(req.params.id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(404).send(html);
   }
 
-  res.status(200).json(user);
+  if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    return res.status(200).json(user);
+  }
+
+  const html = userView.renderUserDetailPage(user);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(html);
 };
 
 /**
@@ -56,45 +71,78 @@ const createUser = (req, res) => {
 };
 
 /**
- * PUT /users/:id
+ * PUT /users/:id (Tam Güncelleme - View Layer)
  * Belirtilen ID'deki kullanıcının tüm bilgilerini günceller (ID korunur).
  */
 const updateUser = (req, res) => {
   const updatedUser = userModel.updateUser(req.params.id, req.body);
 
   if (!updatedUser) {
-    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    const html = userView.renderUserNotFoundPage(req.params.id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(404).send(html);
   }
 
-  res.status(200).json(updatedUser);
+  if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    return res.status(200).json(updatedUser);
+  }
+
+  const html = userView.renderUserUpdatedPage(updatedUser, { isPartial: false });
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(html);
 };
 
 /**
- * PATCH /users/:id
+ * PATCH /users/:id (Kısmi Güncelleme - View Layer)
  * Belirtilen ID'deki kullanıcının alanlarını kısmi olarak günceller.
  */
 const patchUser = (req, res) => {
   const updatedUser = userModel.patchUser(req.params.id, req.body);
 
   if (!updatedUser) {
-    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    const html = userView.renderUserNotFoundPage(req.params.id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(404).send(html);
   }
 
-  res.status(200).json(updatedUser);
+  if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    return res.status(200).json(updatedUser);
+  }
+
+  const html = userView.renderUserUpdatedPage(updatedUser, { isPartial: true });
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(html);
 };
 
 /**
- * DELETE /users/:id
+ * DELETE /users/:id (Silme - View Layer)
  * Belirtilen ID'deki kullanıcıyı siler.
  */
 const deleteUser = (req, res) => {
   const isDeleted = userModel.deleteUser(req.params.id);
 
   if (!isDeleted) {
-    return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    const html = userView.renderUserNotFoundPage(req.params.id);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(404).send(html);
   }
 
-  res.status(204).send();
+  if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    return res.status(204).send();
+  }
+
+  const html = userView.renderUserDeletedPage(req.params.id);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(html);
 };
 
 module.exports = {

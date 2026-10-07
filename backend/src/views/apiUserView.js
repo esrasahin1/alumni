@@ -1,6 +1,6 @@
 /**
- * View Layer: User HTML görünümlerini (şablonlarını) oluşturur.
- * Controller'dan gelen verileri alarak istemciye sunulacak HTML sayfalarını üretir.
+ * View Layer: ApiUser HTML görünümlerini (şablonlarını) oluşturur.
+ * ApiUserController'dan gelen verileri alarak istemciye sunulacak HTML sayfalarını üretir.
  */
 
 /**
@@ -23,14 +23,14 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(title)} - Alumni Tracking System</title>
+  <title>${escapeHtml(title)} - Alumni Tracking System (ApiUser)</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #f4f6f9;
+      background-color: #f7fafc;
       margin: 0;
       padding: 30px 20px;
-      color: #333;
+      color: #2d3748;
     }
     .container {
       max-width: 900px;
@@ -39,6 +39,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       border-radius: 10px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.08);
       padding: 32px;
+      border-top: 4px solid #4c51bf;
     }
     .nav-links {
       margin-bottom: 22px;
@@ -47,7 +48,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       padding-bottom: 12px;
     }
     .nav-links a {
-      color: #3182ce;
+      color: #4c51bf;
       text-decoration: none;
       margin-right: 16px;
       font-weight: 500;
@@ -56,7 +57,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       text-decoration: underline;
     }
     h1 {
-      color: #1a365d;
+      color: #2d3748;
       margin-top: 0;
       font-size: 26px;
       display: flex;
@@ -64,15 +65,15 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       gap: 12px;
     }
     h2 {
-      color: #2b6cb0;
+      color: #434190;
       font-size: 20px;
       margin-top: 28px;
       margin-bottom: 14px;
     }
     .badge {
       display: inline-block;
-      background: #ebf8ff;
-      color: #2b6cb0;
+      background: #ebf4ff;
+      color: #434190;
       padding: 4px 12px;
       border-radius: 14px;
       font-size: 12px;
@@ -93,7 +94,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       border-bottom: 1px solid #e2e8f0;
     }
     th {
-      background-color: #edf2f7;
+      background-color: #f7fafc;
       color: #4a5568;
       font-weight: 600;
     }
@@ -127,12 +128,12 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
     }
     input[type="text"]:focus, input[type="email"]:focus {
       outline: none;
-      border-color: #3182ce;
-      box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+      border-color: #4c51bf;
+      box-shadow: 0 0 0 3px rgba(76, 81, 191, 0.2);
     }
     .btn {
       display: inline-block;
-      background-color: #3182ce;
+      background-color: #4c51bf;
       color: #ffffff;
       padding: 10px 20px;
       border: none;
@@ -143,7 +144,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       cursor: pointer;
       transition: background-color 0.2s;
     }
-    .btn:hover { background-color: #2b6cb0; }
+    .btn:hover { background-color: #434190; }
     .btn-secondary { background-color: #edf2f7; color: #4a5568; }
     .btn-secondary:hover { background-color: #e2e8f0; }
     .btn-danger { background-color: #e53e3e; color: #fff; }
@@ -158,8 +159,8 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
   <div class="container">
     <div class="nav-links">
       <a href="/">🏠 Ana Sayfa</a>
-      <a href="/users">👥 Kullanıcılar (User View)</a>
       <a href="/api/users">⚡ API Kullanıcılar (ApiUser View)</a>
+      <a href="/users">👥 Kullanıcılar (User View)</a>
       <a href="/alumni">🎓 Alumni</a>
       <a href="/api/swagger">📑 Swagger UI</a>
     </div>
@@ -169,18 +170,18 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
 </html>`;
 
 /**
- * 1. GET /users: Tüm kullanıcıları listeler (Read - R)
+ * 1. GET /api/users: Tüm kullanıcıları listeler (Read - R)
  */
 const renderUsersPage = (users = []) => {
   const userRows = users.length > 0
     ? users.map(user => `
       <tr>
         <td><strong>#${user.id}</strong></td>
-        <td><a href="/users/${user.id}" style="color:#2b6cb0; text-decoration:none; font-weight:600;">${escapeHtml(user.name)}</a></td>
+        <td><a href="/api/users/${user.id}" style="color:#4c51bf; text-decoration:none; font-weight:600;">${escapeHtml(user.name)}</a></td>
         <td>${escapeHtml(user.email)}</td>
         <td>${escapeHtml(user.role || user.department || '-')}</td>
         <td>
-          <a href="/users/${user.id}" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">Görüntüle</a>
+          <a href="/api/users/${user.id}" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">Görüntüle</a>
         </td>
       </tr>
     `).join('')
@@ -193,8 +194,8 @@ const renderUsersPage = (users = []) => {
     `;
 
   const content = `
-    <h1>🎓 Kullanıcı Listesi <span class="badge">User View Layer</span></h1>
-    <p>Bu sayfa MVC mimarisindeki <strong>View Layer</strong> kullanılarak sunulmaktadır (CRUD: Read).</p>
+    <h1>⚡ ApiUser Kullanıcı Listesi <span class="badge">ApiUser View Layer</span></h1>
+    <p>Bu sayfa <strong>ApiUser Controller</strong> ve <strong>View Layer</strong> kullanılarak sunulmaktadır (CRUD: Read).</p>
 
     <h2>📋 Kayıtlı Kullanıcılar (${users.length})</h2>
     <table>
@@ -213,31 +214,31 @@ const renderUsersPage = (users = []) => {
     </table>
 
     <div class="card" style="margin-top: 32px;">
-      <h2>➕ Yeni Kullanıcı Ekle (POST /users - Create)</h2>
-      <form action="/users" method="POST">
+      <h2>➕ Yeni Kullanıcı Ekle (POST /api/users - Create)</h2>
+      <form action="/api/users" method="POST">
         <div class="form-group">
           <label for="name">Adı ve Soyadı:</label>
-          <input type="text" id="name" name="name" required placeholder="Örn: Esra Şahin">
+          <input type="text" id="name" name="name" required placeholder="Örn: Ahmet Yılmaz">
         </div>
         <div class="form-group">
           <label for="email">E-posta Adresi:</label>
-          <input type="email" id="email" name="email" required placeholder="Örn: esra@ogr.iu.edu.tr">
+          <input type="email" id="email" name="email" required placeholder="Örn: ahmet@example.com">
         </div>
         <button type="submit" class="btn">Kullanıcıyı Kaydet</button>
       </form>
     </div>
   `;
 
-  return getLayout("Kullanıcı Listesi", "User View Layer", content);
+  return getLayout("ApiUser Kullanıcı Listesi", "ApiUser View Layer", content);
 };
 
 /**
- * 2. POST /users: Yeni kullanıcı oluşturulduğunda HTML sayfası (Create - C)
+ * 2. POST /api/users: Yeni kullanıcı oluşturulduğunda HTML sayfası (Create - C)
  */
 const renderUserCreatedPage = (user) => {
   const content = `
     <h1>✅ Kullanıcı Başarıyla Oluşturuldu! <span class="badge badge-success">Create (C)</span></h1>
-    <p>Yeni kullanıcı sisteme kaydedildi ve View Layer üzerinden görüntülendi.</p>
+    <p>Yeni kullanıcı ApiUser ve View Layer üzerinden başarıyla kaydedildi.</p>
 
     <div class="card card-success">
       <div class="info-item"><strong>Kullanıcı ID:</strong> #${user.id}</div>
@@ -247,20 +248,20 @@ const renderUserCreatedPage = (user) => {
     </div>
 
     <div>
-      <a href="/users" class="btn">📋 Kullanıcı Listesine Dön</a>
-      <a href="/users/${user.id}" class="btn btn-secondary">🔍 Kullanıcı Detayı</a>
+      <a href="/api/users" class="btn">📋 Kullanıcı Listesine Dön</a>
+      <a href="/api/users/${user.id}" class="btn btn-secondary">🔍 Kullanıcı Detayı</a>
     </div>
   `;
 
-  return getLayout("Kullanıcı Oluşturuldu", "User View Layer", content);
+  return getLayout("Kullanıcı Oluşturuldu (ApiUser)", "ApiUser View Layer", content);
 };
 
 /**
- * 3. GET /users/:id: Tek bir kullanıcının detay bilgisi (Read - R)
+ * 3. GET /api/users/:id: Tek bir kullanıcının detay bilgisi (Read - R)
  */
 const renderUserDetailPage = (user) => {
   const content = `
-    <h1>👤 Kullanıcı Detayı <span class="badge">Read (R)</span></h1>
+    <h1>👤 ApiUser Kullanıcı Detayı <span class="badge">Read (R)</span></h1>
     <p>ID: <strong>#${user.id}</strong> numaralı kullanıcının mevcut bilgileri:</p>
 
     <div class="card">
@@ -271,15 +272,15 @@ const renderUserDetailPage = (user) => {
     </div>
 
     <div>
-      <a href="/users" class="btn">📋 Kullanıcı Listesine Dön</a>
+      <a href="/api/users" class="btn">📋 Kullanıcı Listesine Dön</a>
     </div>
   `;
 
-  return getLayout(`Kullanıcı Detayı #${user.id}`, "User View Layer", content);
+  return getLayout(`ApiUser Detayı #${user.id}`, "ApiUser View Layer", content);
 };
 
 /**
- * 4. PUT / PATCH /users/:id: Kullanıcı güncellendiğinde HTML sayfası (Update - U)
+ * 4. PUT / PATCH /api/users/:id: Kullanıcı güncellendiğinde HTML sayfası (Update - U)
  */
 const renderUserUpdatedPage = (user, { isPartial = false } = {}) => {
   const updateType = isPartial ? "Kısmi Güncelleme (PATCH)" : "Tam Güncelleme (PUT)";
@@ -287,7 +288,7 @@ const renderUserUpdatedPage = (user, { isPartial = false } = {}) => {
 
   const content = `
     <h1>✏️ Kullanıcı Başarıyla Güncellendi! <span class="badge ${badgeClass}">${escapeHtml(updateType)}</span></h1>
-    <p>Kullanıcı bilgileri güncellendi ve güncel veriler View Layer ile sunuldu.</p>
+    <p>ApiUser bilgileri güncellendi ve güncel veriler View Layer ile sunuldu.</p>
 
     <div class="card card-success">
       <div class="info-item"><strong>Kullanıcı ID:</strong> #${user.id}</div>
@@ -297,16 +298,16 @@ const renderUserUpdatedPage = (user, { isPartial = false } = {}) => {
     </div>
 
     <div>
-      <a href="/users" class="btn">📋 Kullanıcı Listesine Dön</a>
-      <a href="/users/${user.id}" class="btn btn-secondary">🔍 Kullanıcı Detayı</a>
+      <a href="/api/users" class="btn">📋 Kullanıcı Listesine Dön</a>
+      <a href="/api/users/${user.id}" class="btn btn-secondary">🔍 Kullanıcı Detayı</a>
     </div>
   `;
 
-  return getLayout("Kullanıcı Güncellendi", "User View Layer", content);
+  return getLayout("Kullanıcı Güncellendi (ApiUser)", "ApiUser View Layer", content);
 };
 
 /**
- * 5. DELETE /users/:id: Kullanıcı silindiğinde HTML sayfası (Delete - D)
+ * 5. DELETE /api/users/:id: Kullanıcı silindiğinde HTML sayfası (Delete - D)
  */
 const renderUserDeletedPage = (id) => {
   const content = `
@@ -315,16 +316,16 @@ const renderUserDeletedPage = (id) => {
 
     <div class="card card-danger">
       <p style="margin: 0; color: #742a2a; font-weight: 500;">
-        Kullanıcı bellekteki listeden kaldırıldı. Artık bu ID ile kullanıcıya erişilemez.
+        Kullanıcı ApiUser listesinden kaldırıldı. Artık bu ID ile kullanıcıya erişilemez.
       </p>
     </div>
 
     <div>
-      <a href="/users" class="btn">📋 Kullanıcı Listesine Dön</a>
+      <a href="/api/users" class="btn">📋 Kullanıcı Listesine Dön</a>
     </div>
   `;
 
-  return getLayout("Kullanıcı Silindi", "User View Layer", content);
+  return getLayout("Kullanıcı Silindi (ApiUser)", "ApiUser View Layer", content);
 };
 
 /**
@@ -343,11 +344,11 @@ const renderUserNotFoundPage = (id) => {
     </div>
 
     <div>
-      <a href="/users" class="btn">📋 Kullanıcı Listesine Dön</a>
+      <a href="/api/users" class="btn">📋 Kullanıcı Listesine Dön</a>
     </div>
   `;
 
-  return getLayout("Kullanıcı Bulunamadı (404)", "User View Layer", content);
+  return getLayout("Kullanıcı Bulunamadı (404 - ApiUser)", "ApiUser View Layer", content);
 };
 
 module.exports = {
