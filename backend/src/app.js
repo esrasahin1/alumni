@@ -2,7 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const alumniRoutes = require('./routes/alumniRoutes');
-const apiUserController = require('./controllers/apiUserController');
+const userRoutes = require('./routes/userRoutes');
+const apiUserRoutes = require('./routes/apiUserRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -62,8 +63,10 @@ app.get('/about', (req, res) => {
 </html>`);
 });
 
-// Mevcut /alumni rotası ve kontrol rotaları
+// Rotalar
 app.use('/alumni', alumniRoutes);
+app.use('/users', userRoutes);
+app.use('/api/users', apiUserRoutes);
 app.get('/ok', (req, res) => res.status(200).send('ok'));
 
 // GET /api/health → JSON formatında { "status": "ok" } cevabı döner
@@ -76,21 +79,13 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-// User API CRUD rotaları (apiUserController üzerinden yönetilir)
-app.post('/api/users', apiUserController.createUser);
-app.get('/api/users', apiUserController.getUsers);
-app.get('/api/users/:id', apiUserController.getUser);
-app.put('/api/users/:id', apiUserController.updateUser);
-app.patch('/api/users/:id', apiUserController.patchUser);
-app.delete('/api/users/:id', apiUserController.deleteUser);
-
 // Swagger / OpenAPI 3.0 Dokümantasyonu
 const swaggerDocument = {
   openapi: "3.0.0",
   info: {
     title: "Alumni Tracking System API",
     version: "1.0.0",
-    description: "Web Programming Dersi - Alumni Tracking System REST API Dokümantasyonu"
+    description: "Web Programming Dersi - Alumni Tracking System REST API Dokümantasyonu (MVC: Route -> Controller -> Model)"
   },
   servers: [
     {
@@ -118,7 +113,7 @@ const swaggerDocument = {
     "/api/users": {
       get: {
         summary: "Tüm kullanıcıları listeler",
-        description: "Bellekteki mevcut tüm kullanıcıları dizi olarak döner.",
+        description: "apiUserRoutes ve apiUserController üzerinden mevcut tüm kullanıcıları dizi olarak döner.",
         responses: {
           "200": {
             description: "Kullanıcı listesi",
@@ -134,7 +129,7 @@ const swaggerDocument = {
       },
       post: {
         summary: "Yeni bir kullanıcı oluşturur",
-        description: "Yeni bir kullanıcı ekler ve otomatik artan ID ile döner.",
+        description: "apiUserRoutes ve apiUserController üzerinden yeni bir kullanıcı ekler ve otomatik artan ID ile döner.",
         requestBody: {
           required: true,
           content: {
