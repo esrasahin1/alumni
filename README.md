@@ -56,6 +56,18 @@ Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki ta
 | **`PUT`** | `/api/users/:id` | Belirtilen kullanıcının tüm bilgilerini günceller (ID korunur) | `200 OK` | `404 Not Found` |
 | **`PATCH`** | `/api/users/:id` | Belirtilen kullanıcının sadece gönderilen alanlarını günceller | `200 OK` | `404 Not Found` |
 | **`DELETE`** | `/api/users/:id` | Belirtilen ID'ye sahip kullanıcıyı sistemden siler | `204 No Content` | `404 Not Found` |
+| **`GET`** | `/announcements` | Duyuru listesi ve yönetim arayüzü (HTML View) | `200 OK` | - |
+| **`POST`** | `/announcements` | Yeni bir duyuru ekler (HTML View) | `201 Created` | - |
+| **`GET`** | `/announcements/:id` | ID'si verilen duyurunun detay sayfasını sunar (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/announcements/:id` | Duyurunun tüm bilgilerini günceller (HTML / Fetch) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/announcements/:id` | Duyurunun alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/announcements/:id` | Belirtilen duyuruyu sistemden siler | `200 OK` / `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/announcements` | Sistemdeki tüm duyuruları JSON listesi olarak döner | `200 OK` | - |
+| **`POST`** | `/api/announcements` | Yeni bir duyuru kaydeder (JSON) | `201 Created` | - |
+| **`GET`** | `/api/announcements/:id` | ID'si verilen duyurunun detaylarını getirir (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/api/announcements/:id` | Duyurunun tüm bilgilerini günceller (ID korunur) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/api/announcements/:id` | Duyurunun alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/api/announcements/:id` | Belirtilen ID'ye sahip duyuruyu siler | `204 No Content` | `400 Bad Request`, `404 Not Found` |
 | **`GET`** | `/api/swagger` | İnteraktif Swagger UI dokümantasyon ekranını sunar | `200 OK` | - |
 
 ---
@@ -120,20 +132,26 @@ Below is the current directory and file layout of `backend/src/`:
 backend/src/
 ├── controllers/
 │   ├── alumniController.js
-│   ├── userController.js
-│   └── apiUserController.js
+│   ├── announcementController.js
+│   ├── apiAnnouncementController.js
+│   ├── apiUserController.js
+│   └── userController.js
 │
 ├── models/
+│   ├── announcementModel.js
 │   └── userModel.js
 │
 ├── routes/
 │   ├── alumniRoutes.js
-│   ├── userRoutes.js
-│   └── apiUserRoutes.js
+│   ├── announcementRoutes.js
+│   ├── apiAnnouncementRoutes.js
+│   ├── apiUserRoutes.js
+│   └── userRoutes.js
 │
 ├── views/
-│   ├── userView.js
-│   └── apiUserView.js
+│   ├── announcementView.js
+│   ├── apiUserView.js
+│   └── userView.js
 │
 └── app.js
 ```
@@ -147,8 +165,9 @@ backend/src/
 
 ---
 
-### 2. Model Layer (`models/userModel.js`)
+### 2. Model Layer (`models/userModel.js`, `models/announcementModel.js`)
 
+#### User Model (`models/userModel.js`):
 * **In-Memory Data Storage:**  
   User data is stored in server memory using a native JavaScript array (`users = []`). No external database connection (such as PostgreSQL, MySQL, or MongoDB) is currently used.
 * **Provided CRUD Functions:**  
@@ -159,6 +178,25 @@ backend/src/
   * **`updateUser(id, userData, isPartial = false)`**: Replaces user details while preserving the unique user ID (full replacement for PUT, partial merge for PATCH).
   * **`patchUser(id, partialData)`**: Partially updates specific fields of a user without modifying untouched fields.
   * **`deleteUser(id)`**: Removes the user record with the specified ID from the array and returns a boolean success status.
+
+#### Announcement Model (`models/announcementModel.js`):
+* **In-Memory Data Storage:**  
+  Announcement data is stored in server memory using a native JavaScript array (`announcements = []`). No database is used.
+* **Data Structure & Attributes:**  
+  Each announcement record contains:
+  * `id`: Unique numeric identifier (auto-incremented or safely parsed).
+  * `title`: Title string of the announcement.
+  * `content`: Body content of the announcement.
+  * `createdAt` / `createdDate`: ISO timestamp representing the creation date.
+* **Safe ID Handling:**  
+  Missing or invalid IDs (`null`, `undefined`, non-numeric strings) are safely validated and handled gracefully without runtime exceptions.
+* **Provided CRUD Functions:**  
+  * **`getAllAnnouncements()`**: Returns the full array of existing announcements.
+  * **`getAnnouncementById(id)`**: Searches and returns a single announcement matching the ID (or `null` if not found or invalid).
+  * **`createAnnouncement(announcementData)`**: Generates a unique numeric ID, sets the creation timestamp, appends the record to the array, and returns the new announcement.
+  * **`updateAnnouncement(id, announcementData, isPartial = false)`**: Replaces announcement details while preserving the unique ID and creation date.
+  * **`patchAnnouncement(id, partialData)`**: Partially updates specific fields while keeping remaining fields intact.
+  * **`deleteAnnouncement(id)`**: Removes the announcement record with the specified ID and returns a boolean success status.
 
 ---
 
@@ -176,6 +214,15 @@ The controller layer encapsulates application workflows and orchestrates communi
   * Primarily focused on REST API clients, returning standard JSON responses with appropriate HTTP status codes (200, 201, 204, 404), while also supporting web view dashboards via [apiUserView.js](file:///c:/Users/akema/Desktop/alumni/backend/src/views/apiUserView.js).
 * **`alumniController.js`:**
   * Handles requests for the alumni route (`GET /alumni`) and returns the base status response.
+* **`announcementController.js`:**
+  * Handles requests sent to the **`/announcements`** route for browser clients.
+  * Implements all CRUD controller functions: `getAnnouncements`, `getAnnouncement`, `createAnnouncement`, `updateAnnouncement`, `patchAnnouncement`, and `deleteAnnouncement`.
+  * Integrates with [announcementView.js](file:///c:/Users/akema/Desktop/alumni/backend/src/views/announcementView.js) to render dynamic HTML pages, while safely supporting JSON fallback responses when requested.
+  * Validates IDs and returns HTTP `400` for invalid/missing IDs or `404` for not-found records.
+* **`apiAnnouncementController.js`:**
+  * Handles requests sent to the **`/api/announcements`** route for REST API clients.
+  * Implements all CRUD controller functions: `getAnnouncements`, `getAnnouncement`, `createAnnouncement`, `updateAnnouncement`, `patchAnnouncement`, and `deleteAnnouncement`.
+  * Returns standard JSON responses with appropriate HTTP status codes (`200 OK`, `201 Created`, `204 No Content`, `400 Bad Request`, `404 Not Found`).
 
 ---
 
@@ -199,6 +246,20 @@ The route layer maps incoming HTTP methods and URL paths to their corresponding 
   * `router.delete('/:id', apiUserController.deleteUser)`
 * **`alumniRoutes.js` (mounted at `/alumni`):**
   * `router.get('/', alumniController.getAlumni)`
+* **`announcementRoutes.js` (mounted at `/announcements`):**
+  * `router.get('/', announcementController.getAnnouncements)`
+  * `router.post('/', announcementController.createAnnouncement)`
+  * `router.get('/:id', announcementController.getAnnouncement)`
+  * `router.put('/:id', announcementController.updateAnnouncement)`
+  * `router.patch('/:id', announcementController.patchAnnouncement)`
+  * `router.delete('/:id', announcementController.deleteAnnouncement)`
+* **`apiAnnouncementRoutes.js` (mounted at `/api/announcements`):**
+  * `router.get('/', apiAnnouncementController.getAnnouncements)`
+  * `router.post('/', apiAnnouncementController.createAnnouncement)`
+  * `router.get('/:id', apiAnnouncementController.getAnnouncement)`
+  * `router.put('/:id', apiAnnouncementController.updateAnnouncement)`
+  * `router.patch('/:id', apiAnnouncementController.patchAnnouncement)`
+  * `router.delete('/:id', apiAnnouncementController.deleteAnnouncement)`
 
 Each router file cleanly delegates execution directly to its respective controller.
 
@@ -219,6 +280,15 @@ The presentation layer is implemented through modular view rendering files using
   * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
 * **`apiUserView.js`:**
   * Provides complementary HTML view templates and dashboards for the `/api/users` endpoints.
+* **`announcementView.js`:**
+  * Generates the complete HTML interface for the `/announcements` endpoint.
+  * Powers the interactive **Announcement Management** screen with full CRUD support:
+    * **Create**: "Create New Announcement" section with Title input and Content textarea (`POST /announcements`).
+    * **Read (List)**: Structured announcement table with `ID`, `Title`, `Content`, `Created Date`, and `Actions` columns.
+    * **Read (Details)**: Dedicated announcement detail page (`GET /announcements/:id`).
+    * **Update (Edit)**: In-page editing functionality and standalone edit support (`PUT /announcements/:id`).
+    * **Delete**: Delete button triggering confirmed deletion requests (`DELETE /announcements/:id`).
+  * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
 
 ---
 
@@ -271,14 +341,59 @@ apiUserController.js (Request Parsing & Validation)
 
 ---
 
+#### C. Announcement Web View Flow (`/announcements`)
+```text
+Client Request (Browser)
+       │
+       ▼
+   app.js (Route Mounting & Middleware)
+       │
+       ▼
+announcementRoutes.js (Endpoint Matching: GET, POST, PUT, DELETE)
+       │
+       ▼
+announcementController.js (Request Parsing & Business Logic)
+       │
+       ▼
+ announcementModel.js (In-Memory Array Operations)
+       │
+       ▼
+ announcementView.js (HTML Template Rendering & XSS Escaping)
+       │
+       ▼
+ HTML Response (Rendered Page in Browser)
+```
+
+#### D. Announcement REST API Flow (`/api/announcements`)
+```text
+Client Request (API Client / Swagger)
+       │
+       ▼
+   app.js (Route Mounting & Middleware)
+       │
+       ▼
+apiAnnouncementRoutes.js (Endpoint Matching: GET, POST, PUT, DELETE)
+       │
+       ▼
+apiAnnouncementController.js (Request Parsing & Validation)
+       │
+       ▼
+ announcementModel.js (In-Memory Array Operations)
+       │
+       ▼
+ JSON Response ({ id: 1, title: "...", content: "...", createdAt: "..." })
+```
+
+---
+
 ### 7. Current Architecture Assessment
 
-* **Modular MVC Structure:** The application now fully follows a modular, decoupled MVC-style architecture for all User operations. Model, View, Controller, and Route responsibilities are cleanly isolated into dedicated files and directories.
-* **Separation of Concerns in `app.js`:** User CRUD and data management logic no longer reside inside `app.js`. `app.js` now serves strictly as the application entry point responsible for:
+* **Modular MVC Structure:** The application now fully follows a modular, decoupled MVC-style architecture for both User and Announcement operations. Model, View, Controller, and Route responsibilities are cleanly isolated into dedicated files and directories.
+* **Separation of Concerns in `app.js`:** User and Announcement CRUD and data management logic no longer reside inside `app.js`. `app.js` now serves strictly as the application entry point responsible for:
   * Initializing the Express instance.
   * Registering global middleware (`cors`, `express.json`, `express.urlencoded`).
-  * Mounting route modules (`app.use('/users', userRoutes)`, `app.use('/api/users', apiUserRoutes)`, `app.use('/alumni', alumniRoutes)`).
+  * Mounting route modules (`app.use('/users', userRoutes)`, `app.use('/api/users', apiUserRoutes)`, `app.use('/announcements', announcementRoutes)`, `app.use('/api/announcements', apiAnnouncementRoutes)`, `app.use('/alumni', alumniRoutes)`).
   * Configuring OpenAPI 3.0 specifications and serving Swagger UI (`/api/swagger`).
   * Starting the HTTP server on the configured port.
-* **Database Readiness:** By encapsulating all data operations in `models/userModel.js`, the application is well-prepared to integrate persistent databases (e.g., PostgreSQL, MongoDB) or ORMs in future iterations without altering controller, route, or view implementations.
+* **Database Readiness:** By encapsulating all data operations in `models/userModel.js` and `models/announcementModel.js`, the application is well-prepared to integrate persistent databases (e.g., PostgreSQL, MongoDB) or ORMs in future iterations without altering controller, route, or view implementations.
 

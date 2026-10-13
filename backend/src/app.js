@@ -4,6 +4,8 @@ const swaggerUi = require('swagger-ui-express');
 const alumniRoutes = require('./routes/alumniRoutes');
 const userRoutes = require('./routes/userRoutes');
 const apiUserRoutes = require('./routes/apiUserRoutes');
+const announcementRoutes = require('./routes/announcementRoutes');
+const apiAnnouncementRoutes = require('./routes/apiAnnouncementRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -68,6 +70,8 @@ app.get('/about', (req, res) => {
 app.use('/alumni', alumniRoutes);
 app.use('/users', userRoutes);
 app.use('/api/users', apiUserRoutes);
+app.use('/announcements', announcementRoutes);
+app.use('/api/announcements', apiAnnouncementRoutes);
 app.get('/ok', (req, res) => res.status(200).send('ok'));
 
 // GET /api/health → JSON formatında { "status": "ok" } cevabı döner
@@ -506,6 +510,269 @@ const swaggerDocument = {
             content: {
               "application/json": {
                 example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/announcements": {
+      get: {
+        tags: ["Announcement"],
+        summary: "Tüm duyuruları listeler",
+        description: "apiAnnouncementRoutes ve apiAnnouncementController üzerinden mevcut tüm duyuruları JSON dizisi olarak döner.",
+        responses: {
+          "200": {
+            description: "Duyuru listesi",
+            content: {
+              "application/json": {
+                example: [
+                  {
+                    id: 1,
+                    title: "Mezunlar Buluşması",
+                    content: "Yıllık mezunlar buluşması bu hafta sonu kampüste yapılacaktır.",
+                    createdAt: "2026-10-13T17:00:00.000Z",
+                    createdDate: "2026-10-13T17:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      post: {
+        tags: ["Announcement"],
+        summary: "Yeni bir duyuru oluşturur",
+        description: "apiAnnouncementRoutes ve apiAnnouncementController üzerinden yeni bir duyuru ekler ve oluşturulan duyuruyu döner.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", example: "Mezunlar Buluşması" },
+                  content: { type: "string", example: "Yıllık mezunlar buluşması bu hafta sonu kampüste yapılacaktır." }
+                },
+                required: ["title", "content"]
+              }
+            }
+          }
+        },
+        responses: {
+          "201": {
+            description: "Duyuru başarıyla oluşturuldu",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  title: "Mezunlar Buluşması",
+                  content: "Yıllık mezunlar buluşması bu hafta sonu kampüste yapılacaktır.",
+                  createdAt: "2026-10-13T17:00:00.000Z",
+                  createdDate: "2026-10-13T17:00:00.000Z"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/announcements/{id}": {
+      get: {
+        tags: ["Announcement"],
+        summary: "ID'ye göre duyuru getirir",
+        description: "Belirtilen ID'ye sahip tek bir duyuruyu döner.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Getirilmek istenen duyurunun ID'si"
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Duyuru bulundu",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  title: "Mezunlar Buluşması",
+                  content: "Yıllık mezunlar buluşması bu hafta sonu kampüste yapılacaktır.",
+                  createdAt: "2026-10-13T17:00:00.000Z",
+                  createdDate: "2026-10-13T17:00:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik duyuru ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik duyuru ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "Duyuru bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Duyuru bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      put: {
+        tags: ["Announcement"],
+        summary: "Duyuru bilgilerini tamamen günceller",
+        description: "Mevcut duyurunun tüm bilgilerini değiştirir (ID korunur).",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Güncellenecek duyurunun ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", example: "Güncellenmiş Başlık" },
+                  content: { type: "string", example: "Güncellenmiş duyuru içeriği." }
+                },
+                required: ["title", "content"]
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Duyuru başarıyla güncellendi",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  title: "Güncellenmiş Başlık",
+                  content: "Güncellenmiş duyuru içeriği.",
+                  createdAt: "2026-10-13T17:00:00.000Z",
+                  createdDate: "2026-10-13T17:00:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik duyuru ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik duyuru ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "Duyuru bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Duyuru bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      patch: {
+        tags: ["Announcement"],
+        summary: "Duyurunun belirtilen alanlarını kısmi olarak günceller",
+        description: "Yalnızca gönderilen alanlar güncellenir, diğer alanlar ve ID korunur.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Kısmi güncellenecek duyurunun ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", example: "Kısmi Güncellenmiş Başlık" },
+                  content: { type: "string", example: "Kısmi güncellenmiş içerik." }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Duyuru kısmi olarak güncellendi",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  title: "Kısmi Güncellenmiş Başlık",
+                  content: "Kısmi güncellenmiş içerik.",
+                  createdAt: "2026-10-13T17:00:00.000Z",
+                  createdDate: "2026-10-13T17:00:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik duyuru ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik duyuru ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "Duyuru bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Duyuru bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      delete: {
+        tags: ["Announcement"],
+        summary: "Duyuruyu siler",
+        description: "Belirtilen ID'ye sahip duyuruyu listeden siler.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Silinecek duyurunun ID'si"
+          }
+        ],
+        responses: {
+          "204": { description: "Duyuru başarıyla silindi (İçerik yok)" },
+          "400": {
+            description: "Geçersiz veya eksik duyuru ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik duyuru ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "Duyuru bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Duyuru bulunamadı" }
               }
             }
           }
