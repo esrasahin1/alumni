@@ -1,0 +1,44 @@
+# Docker Compose configuration for Alumni Tracking System
+services:
+  # Database Service: MySQL 8.0 with persistent named volume
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-alumni_db}
+      MYSQL_USER: ${MYSQL_USER:-alumni_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-alumni_password}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Service: Node.js Express Application
+  # Prerequisite Note: Requires backend/Dockerfile to build the image.
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:-alumni_user}
+      DB_PASSWORD: ${DB_PASSWORD:-alumni_password}
+      DB_NAME: ${DB_NAME:-alumni_db}
+      PORT: ${PORT:-3000}
+      NODE_ENV: ${NODE_ENV:-development}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  # Named volume ensuring data persistence across docker compose down and up
+  mysql_data:

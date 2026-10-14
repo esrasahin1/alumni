@@ -1,159 +1,139 @@
-// In-memory veri depolama (Database kullanılmadığı için bellek içi dizi)
+const { getPool } = require('../config/db');
+
+// In-memory array kept for backward compatibility if imported directly
 const announcements = [];
 
 /**
- * Benzersiz sayısal ID üretir.
- * @returns {number} Yeni ID
+ * Normalizes MySQL row to match existing view layer and JSON expectations.
  */
-const generateId = () => {
-  if (announcements.length === 0) {
-    return 1;
-  }
-  return Math.max(...announcements.map(a => Number(a.id) || 0)) + 1;
-};
-
-/**
- * Tüm duyuruları döndürür.
- * @returns {Array} Duyurular listesi
- */
-const getAllAnnouncements = () => {
-  return announcements;
-};
-
-/**
- * ID'ye göre tek bir duyuruyu bulur.
- * @param {number|string} id - Duyuru ID
- * @returns {Object|null} Duyuru nesnesi veya bulunamazsa null
- */
-const getAnnouncementById = (id) => {
-  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
-    return null;
-  }
-  const announcementId = Number(id);
-  const announcement = announcements.find(a => a.id === announcementId);
-  return announcement || null;
-};
-
-/**
- * Yeni bir duyuru oluşturur ve listeye ekler.
- * @param {Object} announcementData - Yeni duyuru bilgileri
- * @returns {Object} Oluşturulan duyuru nesnesi
- */
-const createAnnouncement = (announcementData = {}) => {
-  const data = announcementData || {};
-  const announcementId = data.id !== undefined && data.id !== null && !isNaN(Number(data.id))
-    ? Number(data.id)
-    : generateId();
-
-  const now = new Date().toISOString();
-  const createdDate = data.createdAt || data.createdDate || now;
-
-  const newAnnouncement = {
-    id: announcementId,
-    title: data.title !== undefined ? data.title : '',
-    content: data.content !== undefined ? data.content : '',
-    createdAt: createdDate,
-    createdDate: createdDate,
-    ...data,
-    id: announcementId
+const formatAnnouncement = (row) => {
+  if (!row) return null;
+  const createdAtIso = row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString();
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content,
+    createdAt: createdAtIso,
+    createdDate: createdAtIso,
+    created_at: row.created_at,
+    updated_at: row.updated_at
   };
-
-  if (!newAnnouncement.createdAt) {
-    newAnnouncement.createdAt = createdDate;
-  }
-  if (!newAnnouncement.createdDate) {
-    newAnnouncement.createdDate = newAnnouncement.createdAt;
-  }
-
-  announcements.push(newAnnouncement);
-  return newAnnouncement;
 };
 
 /**
- * Belirtilen ID'deki duyurunun tüm bilgilerini günceller (PUT).
- * @param {number|string} id - Duyuru ID
- * @param {Object} announcementData - Güncellenecek yeni bilgiler
- * @param {boolean} [isPartial=false] - Kısmi güncelleme (PATCH) bayrağı
- * @returns {Object|null} Güncellenmiş duyuru veya bulunamazsa null
+ * Returns all announcements from MySQL ordered by id.
+ * @returns {Promise<Array>} List of announcements
  */
-const updateAnnouncement = (id, announcementData = {}, isPartial = false) => {
+const getAllAnnouncements = async () => {
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    'SELECT id, title, content, created_at, updated_at FROM announcements ORDER BY id ASC'
+  );
+  return rows.map(formatAnnouncement);
+};
+
+/**
+ * Finds a single announcement by ID.
+ * @param {number|string} id - Announcement ID
+ * @returns {Promise<Object|null>} Announcement object or null if not found
+ */
+const getAnnouncementById = async (id) => {
   if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
     return null;
   }
-
   const announcementId = Number(id);
-  const announcementIndex = announcements.findIndex(a => a.id === announcementId);
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    'SELECT id, title, content, created_at, updated_at FROM announcements WHERE id = ? LIMIT 1',
+    [announcementId]
+  );
+  return rows.length > 0 ? formatAnnouncement(rows[0]) : null;
+};
 
-  if (announcementIndex === -1) {
+/**
+ * Creates a new announcement in MySQL.
+ * @param {Object} announcementData - Announcement data { title, content }
+ * @returns {Promise<Object>} Created announcement object
+ */
+const createAnnouncement = async (announcementData = {}) => {
+  const data = announcementData || {};
+  const title = data.title !== undefined ? String(data.title) : '';
+  const content = data.content !== undefined ? String(data.content) : '';
+
+  const pool = await getPool();
+  const [result] = await pool.query(
+    'INSERT INTO announcements (title, content) VALUES (?, ?)',
+    [title, content]
+  );
+
+  return await getAnnouncementById(result.insertId);
+};
+
+/**
+ * Updates an announcement by ID in MySQL (full PUT or partial PATCH).
+ * @param {number|string} id - Announcement ID
+ * @param {Object} announcementData - New announcement data
+ * @param {boolean} [isPartial=false] - Partial update flag
+ * @returns {Promise<Object|null>} Updated announcement or null if not found
+ */
+const updateAnnouncement = async (id, announcementData = {}, isPartial = false) => {
+  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+    return null;
+  }
+  const announcementId = Number(id);
+  const existingAnnouncement = await getAnnouncementById(announcementId);
+
+  if (!existingAnnouncement) {
     return null;
   }
 
-  const existingAnnouncement = announcements[announcementIndex];
   const data = announcementData || {};
+  let updatedTitle = existingAnnouncement.title;
+  let updatedContent = existingAnnouncement.content;
 
   if (isPartial) {
-    // Kısmi güncelleme: Mevcut alanları koru, sadece gelenleri ez, ID'yi koru
-    const updatedAnnouncement = {
-      ...existingAnnouncement,
-      ...data,
-      id: announcementId
-    };
-    announcements[announcementIndex] = updatedAnnouncement;
-    return updatedAnnouncement;
+    if (data.title !== undefined) updatedTitle = String(data.title);
+    if (data.content !== undefined) updatedContent = String(data.content);
+  } else {
+    updatedTitle = data.title !== undefined ? String(data.title) : '';
+    updatedContent = data.content !== undefined ? String(data.content) : '';
   }
 
-  // Tam güncelleme (PUT): Yeni body ile değiştir, ID ve oluşturma tarihini koru
-  const createdDate = data.createdAt || data.createdDate || existingAnnouncement.createdAt || existingAnnouncement.createdDate;
-  const updatedAnnouncement = {
-    id: announcementId,
-    title: data.title !== undefined ? data.title : '',
-    content: data.content !== undefined ? data.content : '',
-    createdAt: createdDate,
-    createdDate: createdDate,
-    ...data,
-    id: announcementId
-  };
+  const pool = await getPool();
+  await pool.query(
+    'UPDATE announcements SET title = ?, content = ? WHERE id = ?',
+    [updatedTitle, updatedContent, announcementId]
+  );
 
-  if (!updatedAnnouncement.createdAt) {
-    updatedAnnouncement.createdAt = createdDate;
-  }
-  if (!updatedAnnouncement.createdDate) {
-    updatedAnnouncement.createdDate = updatedAnnouncement.createdAt;
-  }
-
-  announcements[announcementIndex] = updatedAnnouncement;
-  return updatedAnnouncement;
+  return await getAnnouncementById(announcementId);
 };
 
 /**
- * Belirtilen ID'deki duyurunun alanlarını kısmi olarak günceller (PATCH).
- * @param {number|string} id - Duyuru ID
- * @param {Object} partialData - Güncellenecek alanlar
- * @returns {Object|null} Güncellenmiş duyuru veya bulunamazsa null
+ * Partially updates an announcement by ID (PATCH).
+ * @param {number|string} id - Announcement ID
+ * @param {Object} partialData - Partial fields to update
+ * @returns {Promise<Object|null>}
  */
-const patchAnnouncement = (id, partialData) => {
-  return updateAnnouncement(id, partialData, true);
+const patchAnnouncement = async (id, partialData) => {
+  return await updateAnnouncement(id, partialData, true);
 };
 
 /**
- * Belirtilen ID'deki duyuruyu siler.
- * @param {number|string} id - Duyuru ID
- * @returns {boolean} Silme başarılıysa true, duyuru bulunamazsa false
+ * Deletes an announcement by ID from MySQL.
+ * @param {number|string} id - Announcement ID
+ * @returns {Promise<boolean>} True if deleted, false if announcement not found
  */
-const deleteAnnouncement = (id) => {
+const deleteAnnouncement = async (id) => {
   if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
     return false;
   }
-
   const announcementId = Number(id);
-  const announcementIndex = announcements.findIndex(a => a.id === announcementId);
-
-  if (announcementIndex === -1) {
-    return false;
-  }
-
-  announcements.splice(announcementIndex, 1);
-  return true;
+  const pool = await getPool();
+  const [result] = await pool.query(
+    'DELETE FROM announcements WHERE id = ?',
+    [announcementId]
+  );
+  return result.affectedRows > 0;
 };
 
 module.exports = {

@@ -1,105 +1,129 @@
 const announcementModel = require('../models/announcementModel');
 
 /**
- * Controller: /api/announcements REST API isteklerini ve iş mantığını yönetir (JSON)
+ * Controller: /api/announcements REST API isteklerini ve iş mantığını yönetir (JSON, MySQL)
  */
 
 /**
  * GET /api/announcements
  * Tüm duyuruları JSON listesi olarak döner.
  */
-const getAnnouncements = (req, res) => {
-  const announcements = announcementModel.getAllAnnouncements();
-  res.status(200).json(announcements);
+const getAnnouncements = async (req, res) => {
+  try {
+    const announcements = await announcementModel.getAllAnnouncements();
+    res.status(200).json(announcements);
+  } catch (error) {
+    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+  }
 };
 
 /**
  * GET /api/announcements/:id
  * ID'ye göre tek bir duyuruyu getirir (Bulunamazsa 404, geçersiz ID ise 400 döner).
  */
-const getAnnouncement = (req, res) => {
-  const id = req && req.params && req.params.id;
+const getAnnouncement = async (req, res) => {
+  try {
+    const id = req && req.params && req.params.id;
 
-  if (!id || isNaN(Number(id))) {
-    return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
+    if (!id || isNaN(Number(id))) {
+      return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
+    }
+
+    const announcement = await announcementModel.getAnnouncementById(id);
+
+    if (!announcement) {
+      return res.status(404).json({ message: "Duyuru bulunamadı" });
+    }
+
+    res.status(200).json(announcement);
+  } catch (error) {
+    res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
-
-  const announcement = announcementModel.getAnnouncementById(id);
-
-  if (!announcement) {
-    return res.status(404).json({ message: "Duyuru bulunamadı" });
-  }
-
-  res.status(200).json(announcement);
 };
 
 /**
  * POST /api/announcements
  * Yeni bir duyuru oluşturur ve JSON döner (201 Created).
  */
-const createAnnouncement = (req, res) => {
-  const newAnnouncement = announcementModel.createAnnouncement(req && req.body);
-  res.status(201).json(newAnnouncement);
+const createAnnouncement = async (req, res) => {
+  try {
+    const newAnnouncement = await announcementModel.createAnnouncement(req && req.body);
+    res.status(201).json(newAnnouncement);
+  } catch (error) {
+    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+  }
 };
 
 /**
  * PUT /api/announcements/:id
  * Belirtilen ID'deki duyurunun tüm bilgilerini günceller (ID korunur).
  */
-const updateAnnouncement = (req, res) => {
-  const id = req && req.params && req.params.id;
+const updateAnnouncement = async (req, res) => {
+  try {
+    const id = req && req.params && req.params.id;
 
-  if (!id || isNaN(Number(id))) {
-    return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
+    if (!id || isNaN(Number(id))) {
+      return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
+    }
+
+    const updatedAnnouncement = await announcementModel.updateAnnouncement(id, req && req.body);
+
+    if (!updatedAnnouncement) {
+      return res.status(404).json({ message: "Duyuru bulunamadı" });
+    }
+
+    res.status(200).json(updatedAnnouncement);
+  } catch (error) {
+    res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
-
-  const updatedAnnouncement = announcementModel.updateAnnouncement(id, req && req.body);
-
-  if (!updatedAnnouncement) {
-    return res.status(404).json({ message: "Duyuru bulunamadı" });
-  }
-
-  res.status(200).json(updatedAnnouncement);
 };
 
 /**
  * PATCH /api/announcements/:id
  * Belirtilen ID'deki duyurunun sadece gönderilen alanlarını kısmi olarak günceller.
  */
-const patchAnnouncement = (req, res) => {
-  const id = req && req.params && req.params.id;
+const patchAnnouncement = async (req, res) => {
+  try {
+    const id = req && req.params && req.params.id;
 
-  if (!id || isNaN(Number(id))) {
-    return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
+    if (!id || isNaN(Number(id))) {
+      return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
+    }
+
+    const updatedAnnouncement = await announcementModel.patchAnnouncement(id, req && req.body);
+
+    if (!updatedAnnouncement) {
+      return res.status(404).json({ message: "Duyuru bulunamadı" });
+    }
+
+    res.status(200).json(updatedAnnouncement);
+  } catch (error) {
+    res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
-
-  const updatedAnnouncement = announcementModel.patchAnnouncement(id, req && req.body);
-
-  if (!updatedAnnouncement) {
-    return res.status(404).json({ message: "Duyuru bulunamadı" });
-  }
-
-  res.status(200).json(updatedAnnouncement);
 };
 
 /**
  * DELETE /api/announcements/:id
  * Belirtilen ID'deki duyuruyu siler (204 No Content veya 404 Not Found döner).
  */
-const deleteAnnouncement = (req, res) => {
-  const id = req && req.params && req.params.id;
+const deleteAnnouncement = async (req, res) => {
+  try {
+    const id = req && req.params && req.params.id;
 
-  if (!id || isNaN(Number(id))) {
-    return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
+    if (!id || isNaN(Number(id))) {
+      return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
+    }
+
+    const isDeleted = await announcementModel.deleteAnnouncement(id);
+
+    if (!isDeleted) {
+      return res.status(404).json({ message: "Duyuru bulunamadı" });
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
-
-  const isDeleted = announcementModel.deleteAnnouncement(id);
-
-  if (!isDeleted) {
-    return res.status(404).json({ message: "Duyuru bulunamadı" });
-  }
-
-  res.status(204).send();
 };
 
 module.exports = {

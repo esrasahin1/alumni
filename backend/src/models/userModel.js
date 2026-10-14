@@ -1,102 +1,120 @@
-// In-memory veri depolama (Database kullanılmadığı için bellek içi dizi)
+const { getPool } = require('../config/db');
+
+// In-memory array kept for backward compatibility if imported directly
 const users = [];
 
 /**
- * Tüm kullanıcıları döndürür.
- * @returns {Array} Kullanıcılar listesi
+ * Returns all users from MySQL ordered by id.
+ * @returns {Promise<Array>} List of users
  */
-const getAllUsers = () => {
-  return users;
+const getAllUsers = async () => {
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    'SELECT id, name, email, created_at, updated_at FROM users ORDER BY id ASC'
+  );
+  return rows;
 };
 
 /**
- * ID'ye göre tek bir kullanıcıyı bulur.
- * @param {number|string} id - Kullanıcı ID
- * @returns {Object|null} Kullanıcı nesnesi veya bulunamazsa null
+ * Finds a single user by ID.
+ * @param {number|string} id - User ID
+ * @returns {Promise<Object|null>} User object or null if not found
  */
-const getUserById = (id) => {
+const getUserById = async (id) => {
+  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+    return null;
+  }
   const userId = Number(id);
-  const user = users.find(u => u.id === userId);
-  return user || null;
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    'SELECT id, name, email, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
+    [userId]
+  );
+  return rows.length > 0 ? rows[0] : null;
 };
 
 /**
- * Yeni bir kullanıcı oluşturur ve listeye ekler.
- * @param {Object} userData - Yeni kullanıcı bilgileri
- * @returns {Object} Oluşturulan kullanıcı nesnesi
+ * Creates a new user in MySQL.
+ * @param {Object} userData - User data { name, email }
+ * @returns {Promise<Object>} Created user object
  */
-const createUser = (userData) => {
-  const newUser = {
-    id: userData && userData.id ? Number(userData.id) : users.length + 1,
-    ...userData
-  };
-  newUser.id = Number(newUser.id);
-  users.push(newUser);
-  return newUser;
+const createUser = async (userData = {}) => {
+  const name = userData.name !== undefined ? String(userData.name) : '';
+  const email = userData.email !== undefined ? String(userData.email) : '';
+
+  const pool = await getPool();
+  const [result] = await pool.query(
+    'INSERT INTO users (name, email) VALUES (?, ?)',
+    [name, email]
+  );
+
+  return await getUserById(result.insertId);
 };
 
 /**
- * Belirtilen ID'deki kullanıcının tüm bilgilerini günceller (PUT).
- * @param {number|string} id - Kullanıcı ID
- * @param {Object} userData - Güncellenecek yeni bilgiler
- * @param {boolean} [isPartial=false] - Kısmi güncelleme (PATCH) bayrağı
- * @returns {Object|null} Güncellenmiş kullanıcı veya bulunamazsa null
+ * Updates a user by ID in MySQL (full PUT or partial PATCH).
+ * @param {number|string} id - User ID
+ * @param {Object} userData - New user data
+ * @param {boolean} [isPartial=false] - Partial update flag
+ * @returns {Promise<Object|null>} Updated user or null if not found
  */
-const updateUser = (id, userData, isPartial = false) => {
+const updateUser = async (id, userData = {}, isPartial = false) => {
+  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+    return null;
+  }
   const userId = Number(id);
-  const userIndex = users.findIndex(u => u.id === userId);
+  const existingUser = await getUserById(userId);
 
-  if (userIndex === -1) {
+  if (!existingUser) {
     return null;
   }
 
+  const pool = await getPool();
+  let updatedName = existingUser.name;
+  let updatedEmail = existingUser.email;
+
   if (isPartial) {
-    // Kısmi güncelleme: Mevcut alanları koru, sadece gelenleri ez, ID'yi koru
-    const updatedUser = {
-      ...users[userIndex],
-      ...userData,
-      id: userId
-    };
-    users[userIndex] = updatedUser;
-    return updatedUser;
+    if (userData.name !== undefined) updatedName = String(userData.name);
+    if (userData.email !== undefined) updatedEmail = String(userData.email);
+  } else {
+    updatedName = userData.name !== undefined ? String(userData.name) : '';
+    updatedEmail = userData.email !== undefined ? String(userData.email) : '';
   }
 
-  // Tam güncelleme (PUT): Yeni body ile değiştir, ID'yi koru
-  const updatedUser = {
-    id: userId,
-    ...userData
-  };
-  updatedUser.id = userId;
+  await pool.query(
+    'UPDATE users SET name = ?, email = ? WHERE id = ?',
+    [updatedName, updatedEmail, userId]
+  );
 
-  users[userIndex] = updatedUser;
-  return updatedUser;
+  return await getUserById(userId);
 };
 
 /**
- * Belirtilen ID'deki kullanıcının alanlarını kısmi olarak günceller (PATCH).
- * @param {number|string} id - Kullanıcı ID
- * @param {Object} partialData - Güncellenecek alanlar
- * @returns {Object|null} Güncellenmiş kullanıcı veya bulunamazsa null
+ * Partially updates a user by ID (PATCH).
+ * @param {number|string} id - User ID
+ * @param {Object} partialData - Partial fields to update
+ * @returns {Promise<Object|null>}
  */
-const patchUser = (id, partialData) => {
-  return updateUser(id, partialData, true);
+const patchUser = async (id, partialData) => {
+  return await updateUser(id, partialData, true);
 };
 
 /**
- * Belirtilen ID'deki kullanıcıyı siler.
- * @param {number|string} id - Kullanıcı ID
- * @returns {boolean} Silme başarılıysa true, kullanıcı bulunamazsa false
+ * Deletes a user by ID from MySQL.
+ * @param {number|string} id - User ID
+ * @returns {Promise<boolean>} True if deleted, false if user not found
  */
-const deleteUser = (id) => {
-  const userId = Number(id);
-  const userIndex = users.findIndex(u => u.id === userId);
-
-  if (userIndex === -1) {
+const deleteUser = async (id) => {
+  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
     return false;
   }
-
-  users.splice(userIndex, 1);
-  return true;
+  const userId = Number(id);
+  const pool = await getPool();
+  const [result] = await pool.query(
+    'DELETE FROM users WHERE id = ?',
+    [userId]
+  );
+  return result.affectedRows > 0;
 };
 
 module.exports = {

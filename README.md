@@ -10,19 +10,42 @@ Sistem, mezunlar ve öğrenciler arasındaki iletişimi güçlendirmeyi, kariyer
 
 ## 🛠️ Kullanılan Teknolojiler
 
-* **Çalışma Ortamı:** Node.js
-* **Web Framework:** Express.js
+* **Çalışma Ortamı:** Node.js (v20+)
+* **Web Framework:** Express.js (v4.19)
 * **Dokümantasyon & Test Arayüzü:** Swagger UI (`swagger-ui-express` ve OpenAPI 3.0)
-* **Veri Depolama:** In-Memory (Bellek İçi Dizi - Başlangıç aşaması)
-* **Ara Katmanlar (Middleware):** CORS, Express JSON Parser
+* **Veritabanı & Kalıcılık:** MySQL 8.0, `mysql2` (`mysql2/promise` Connection Pool), Docker Named Volume (`alumni_mysql_data`)
+* **Migrasyon & Seeder:** Node.js tabanlı Migration Runner (`backend/src/database/migrate.js`) ve Idempotent Seeder (`backend/src/database/seed.js`)
+* **Konteynerizasyon:** Docker, Docker Compose (Multi-container: `db` + `backend`)
+* **Ara Katmanlar (Middleware):** CORS, Express JSON Parser, Express URL-Encoded Parser
 
 ---
 
 ## ⚙️ Kurulum ve Çalıştırma
 
-Projeyi yerel makinenizde çalıştırmak için aşağıdaki adımları izleyin:
+Projeyi çalıştırmak için iki yöntem bulunmaktadır:
 
-### 1. Bağımlılıkları Yükleyin
+### Yöntem A: Docker Compose ile Tam Yığın (Önerilen)
+
+Tüm yığını (MySQL 8.0 veritabanı ve Node.js backend servisi) tek bir komutla derleyip başlatmak için:
+
+1. **Konteynerleri Başlatın:**
+   ```bash
+   docker compose up -d --build
+   ```
+2. **Migrasyon ve Seed İşlemlerini Çalıştırın:**
+   ```bash
+   docker compose exec backend npm run migrate
+   docker compose exec backend npm run seed
+   ```
+3. Uygulama `http://localhost:3000` adresinde, Swagger UI ise `http://localhost:3000/api/swagger` adresinde yayına girer.
+
+---
+
+### Yöntem B: Yerel Geliştirme (Hibrit)
+
+MySQL veritabanını Docker üzerinde, Node.js uygulamasını yerel terminalinizde çalıştırmak için:
+
+#### 1. Bağımlılıkları Yükleyin
 
 Terminalde `backend` dizinine geçin ve gerekli paketleri kurun:
 
@@ -31,7 +54,37 @@ cd backend
 npm install
 ```
 
-### 2. Sunucuyu Başlatın
+#### 2. Veritabanını Başlatın ve Migrasyonları Çalıştırın (Database Migration)
+
+1. **MySQL Veritabanı Konteynerini Başlatın:**
+   ```bash
+   docker compose up -d db
+   ```
+2. **Migrasyonları Uygulayın:**
+   ```bash
+   cd backend
+   npm run migrate
+   ```
+3. **Migrasyon Durumunu ve Tabloları Doğrulayın:**
+   ```bash
+   npm run migrate:status
+   npm run migrate:verify
+   ```
+*(Geri alma işlemi için `npm run migrate:down` komutu kullanılabilir).*
+
+#### 3. Örnek Verileri Yükleyin (Database Seeding)
+
+Veritabanına test ve geliştirme amaçlı örnek kayıtları (`users`, `announcements`) güvenli ve tekrarlanabilir (idempotent) şekilde eklemek için:
+
+```bash
+cd backend
+npm run seed
+# veya alternatif olarak:
+npm run db:seed
+```
+*(Tekrar çalıştırıldığında mevcut kayıtlar atlanır, yinelenen veri oluşmaz).*
+
+#### 4. Sunucuyu Başlatın
 
 Uygulamayı başlatmak için:
 
@@ -104,13 +157,24 @@ Projenin tüm API endpoint'leri interaktif Swagger UI arayüzü ile belgelenmiş
 alumni/
 ├── backend/
 │   ├── src/
+│   │   ├── config/           # Veritabanı bağlantı havuzu (db.js)
 │   │   ├── controllers/      # İstek kontrolcüleri ve iş mantığı
-│   │   ├── models/           # Veri modelleri ve in-memory veri yönetimi
+│   │   ├── database/         # Migrasyonlar, tohumlayıcılar (seeders) ve factory'ler
+│   │   │   ├── factories/    # Mock veri üreticileri (userFactory, announcementFactory)
+│   │   │   ├── migrations/   # SQL/JS şema göç dosyaları (users, announcements)
+│   │   │   ├── seeds/        # Tekrarlanabilir örnek veri tohumlayıcıları
+│   │   │   ├── migrate.js    # Migrasyon CLI çalıştırıcısı
+│   │   │   └── seed.js       # Seed CLI çalıştırıcısı
+│   │   ├── models/           # MySQL 8.0 veri modelleri ve asenkron CRUD sorguları
 │   │   ├── routes/           # API ve web rota tanımlamaları
 │   │   ├── views/            # HTML arayüz ve sayfa şablonları
 │   │   └── app.js            # Express sunucusu, ara katmanlar ve Swagger konfigürasyonu
+│   ├── .dockerignore         # Docker derleme hariç tutma kuralları
+│   ├── Dockerfile            # Backend Docker konteyner yapılandırması
 │   ├── package.json          # Proje bağımlılıkları ve script'ler
 │   └── package-lock.json
+├── docker-compose.yml        # Multi-container mimari (MySQL 8.0 + Node.js Backend)
+├── ddd.md                    # Veri Tasarım Dokümantasyonu (Data Design Documentation)
 └── README.md                 # Proje dokümantasyonu ve API kılavuzu
 ```
 
@@ -130,73 +194,97 @@ Below is the current directory and file layout of `backend/src/`:
 
 ```text
 backend/src/
+├── config/
+│   └── db.js                 # Centralized MySQL connection pool (mysql2/promise)
 ├── controllers/
 │   ├── alumniController.js
 │   ├── announcementController.js
 │   ├── apiAnnouncementController.js
 │   ├── apiUserController.js
 │   └── userController.js
-│
+├── database/
+│   ├── factories/
+│   │   ├── announcementFactory.js
+│   │   └── userFactory.js
+│   ├── migrations/
+│   │   ├── 001_create_users_table.js
+│   │   └── 002_create_announcements_table.js
+│   ├── seeds/
+│   │   ├── 001_seed_users.js
+│   │   └── 002_seed_announcements.js
+│   ├── migrate.js
+│   └── seed.js
 ├── models/
 │   ├── announcementModel.js
 │   └── userModel.js
-│
 ├── routes/
 │   ├── alumniRoutes.js
 │   ├── announcementRoutes.js
 │   ├── apiAnnouncementRoutes.js
 │   ├── apiUserRoutes.js
 │   └── userRoutes.js
-│
 ├── views/
 │   ├── announcementView.js
 │   ├── apiUserView.js
 │   └── userView.js
-│
 └── app.js
 ```
 
 #### Layer Responsibilities:
-* **`controllers/`**: Receives incoming requests from the route layer, executes business logic, coordinates with the model layer, and returns formatted HTML views or JSON responses.
-* **`models/`**: Manages the data layer, encapsulating data storage and direct CRUD manipulation functions.
+* **`config/`**: Centralized MySQL connection pool configuration (`backend/src/config/db.js`) supporting environment variables, dynamic host resolution (`db` within Docker network or `localhost` on host), auto-reconnect, and health check validation.
+* **`database/`**: Database lifecycle and schema management containing forward/rollback SQL migration scripts, realistic factory mock generators, and idempotent seed scripts.
+* **`controllers/`**: Receives incoming requests from the route layer, executes business logic, coordinates with asynchronous models using `await`, handles validation and error reporting, and returns formatted HTML views or JSON responses.
+* **`models/`**: Manages the data persistence layer, encapsulating asynchronous MySQL 8.0 queries via parameterized statements (`?`), returning structured records and promises to controllers.
 * **`routes/`**: Defines HTTP route definitions (verbs and path patterns) and maps incoming requests to their respective controller handler functions.
-* **`views/`**: Renders dynamic, accessible, and sanitized HTML templates for browser presentation.
+* **`views/`**: Renders dynamic, accessible, and sanitized HTML templates for browser presentation using native JavaScript template literals.
 * **`app.js`**: Serves as the central server entry point; configures global middleware (CORS, body parsers), mounts the route modules, sets up OpenAPI/Swagger UI documentation, and starts the HTTP listener.
 
 ---
 
 ### 2. Model Layer (`models/userModel.js`, `models/announcementModel.js`)
 
+> 💡 **Data Design Documentation:** For exhaustive entity schemas, field specifications, constraints, and relational designs, refer to [`ddd.md`](ddd.md).
+
 #### User Model (`models/userModel.js`):
-* **In-Memory Data Storage:**  
-  User data is stored in server memory using a native JavaScript array (`users = []`). No external database connection (such as PostgreSQL, MySQL, or MongoDB) is currently used.
-* **Provided CRUD Functions:**  
-  The model exposes the following functions to manage user records:
-  * **`getAllUsers()`**: Returns the full array of existing users.
-  * **`getUserById(id)`**: Searches and returns a single user matching the numeric ID (or `null` if not found).
-  * **`createUser(userData)`**: Assigns an auto-incrementing ID (`users.length + 1` if not provided) and appends the new user record to the array.
-  * **`updateUser(id, userData, isPartial = false)`**: Replaces user details while preserving the unique user ID (full replacement for PUT, partial merge for PATCH).
-  * **`patchUser(id, partialData)`**: Partially updates specific fields of a user without modifying untouched fields.
-  * **`deleteUser(id)`**: Removes the user record with the specified ID from the array and returns a boolean success status.
+* **MySQL Database Persistence:**  
+  User data is stored persistently in the `users` table of the MySQL 8.0 relational database (`alumni_db`) using the shared connection pool via `mysql2/promise` (`backend/src/config/db.js`). In-memory storage is no longer used.
+* **Table Schema & Constraints:**  
+  * `id`: `INT AUTO_INCREMENT PRIMARY KEY`
+  * `name`: `VARCHAR(255) NOT NULL`
+  * `email`: `VARCHAR(255) NOT NULL UNIQUE` (enforced at the database engine level)
+  * `created_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
+  * `updated_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`
+* **Security & Validation:**  
+  All SQL queries utilize parameterized placeholders (`?`) to guarantee complete protection against SQL injection. Unique constraint violations (`ER_DUP_ENTRY`) are surfaced to the controller layer.
+* **Provided Async CRUD Functions:**  
+  The model exposes asynchronous functions returning promises to manage user records:
+  * **`getAllUsers()`**: Queries `SELECT * FROM users ORDER BY id ASC` and returns all user records.
+  * **`getUserById(id)`**: Queries `SELECT * FROM users WHERE id = ?` and returns the matching user record (or `null` if not found).
+  * **`createUser(userData)`**: Inserts a new user record (`INSERT INTO users (name, email) VALUES (?, ?)`), returning the created user with its generated ID and timestamps.
+  * **`updateUser(id, userData, isPartial = false)`**: Updates user fields (`UPDATE users SET name = ?, email = ? WHERE id = ?`), returning the updated user record or `null`.
+  * **`patchUser(id, partialData)`**: Dynamically constructs a parameterized update query for only the provided fields (`name` and/or `email`), preserving untouched fields.
+  * **`deleteUser(id)`**: Deletes the user record (`DELETE FROM users WHERE id = ?`) and returns a boolean success status (`true`/`false`).
 
 #### Announcement Model (`models/announcementModel.js`):
-* **In-Memory Data Storage:**  
-  Announcement data is stored in server memory using a native JavaScript array (`announcements = []`). No database is used.
-* **Data Structure & Attributes:**  
-  Each announcement record contains:
-  * `id`: Unique numeric identifier (auto-incremented or safely parsed).
-  * `title`: Title string of the announcement.
-  * `content`: Body content of the announcement.
-  * `createdAt` / `createdDate`: ISO timestamp representing the creation date.
-* **Safe ID Handling:**  
-  Missing or invalid IDs (`null`, `undefined`, non-numeric strings) are safely validated and handled gracefully without runtime exceptions.
-* **Provided CRUD Functions:**  
-  * **`getAllAnnouncements()`**: Returns the full array of existing announcements.
-  * **`getAnnouncementById(id)`**: Searches and returns a single announcement matching the ID (or `null` if not found or invalid).
-  * **`createAnnouncement(announcementData)`**: Generates a unique numeric ID, sets the creation timestamp, appends the record to the array, and returns the new announcement.
-  * **`updateAnnouncement(id, announcementData, isPartial = false)`**: Replaces announcement details while preserving the unique ID and creation date.
-  * **`patchAnnouncement(id, partialData)`**: Partially updates specific fields while keeping remaining fields intact.
-  * **`deleteAnnouncement(id)`**: Removes the announcement record with the specified ID and returns a boolean success status.
+* **MySQL Database Persistence:**  
+  Announcement data is stored persistently in the `announcements` table of the MySQL 8.0 relational database (`alumni_db`) using the shared connection pool via `mysql2/promise` (`backend/src/config/db.js`). In-memory storage is no longer used.
+* **Table Schema & Attributes:**  
+  * `id`: `INT AUTO_INCREMENT PRIMARY KEY`
+  * `title`: `VARCHAR(255) NOT NULL`
+  * `content`: `TEXT NOT NULL`
+  * `created_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
+  * `updated_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`
+* **Entity Independence:**  
+  Announcements represent broadcast/departmental bulletins and are independent entities. There is **no `author_id`** or foreign key relationship between `announcements` and `users`.
+* **Safe ID Handling & Parameterized Queries:**  
+  Numeric IDs are safely cast (`Number(id)`); invalid or missing IDs return `null` gracefully without runtime exceptions. All operations use parameterized SQL queries (`?`).
+* **Provided Async CRUD Functions:**  
+  * **`getAllAnnouncements()`**: Queries `SELECT * FROM announcements ORDER BY id ASC` and returns all announcement records.
+  * **`getAnnouncementById(id)`**: Queries `SELECT * FROM announcements WHERE id = ?` and returns the matching announcement (or `null` if not found or invalid).
+  * **`createAnnouncement(announcementData)`**: Inserts a new announcement (`INSERT INTO announcements (title, content) VALUES (?, ?)`), returning the newly created record with generated ID and timestamps.
+  * **`updateAnnouncement(id, announcementData, isPartial = false)`**: Replaces title and content (`UPDATE announcements SET title = ?, content = ? WHERE id = ?`), returning the updated record or `null`.
+  * **`patchAnnouncement(id, partialData)`**: Dynamically updates only the specified fields (`title` and/or `content`), preserving untouched fields.
+  * **`deleteAnnouncement(id)`**: Removes the announcement record (`DELETE FROM announcements WHERE id = ?`) and returns a boolean success status (`true`/`false`).
 
 ---
 
@@ -292,7 +380,7 @@ The presentation layer is implemented through modular view rendering files using
 
 ---
 
-### 6. MVC Request Flow
+#### 6. MVC Request Flow
 
 The application executes requests through decoupled, end-to-end MVC flows:
 
@@ -310,7 +398,7 @@ userRoutes.js (Endpoint Matching: GET, POST, PUT, DELETE)
 userController.js (Request Parsing & Business Logic)
        │
        ▼
-  userModel.js (In-Memory Array Operations)
+  userModel.js (MySQL Database via db.js Pool)
        │
        ▼
   userView.js (HTML Template Rendering & XSS Escaping)
@@ -333,7 +421,7 @@ apiUserRoutes.js (Endpoint Matching)
 apiUserController.js (Request Parsing & Validation)
        │
        ▼
-  userModel.js (In-Memory Array Operations)
+  userModel.js (MySQL Database via db.js Pool)
        │
        ▼
  JSON Response ({ id: 1, name: "...", email: "..." })
@@ -355,7 +443,7 @@ announcementRoutes.js (Endpoint Matching: GET, POST, PUT, DELETE)
 announcementController.js (Request Parsing & Business Logic)
        │
        ▼
- announcementModel.js (In-Memory Array Operations)
+ announcementModel.js (MySQL Database via db.js Pool)
        │
        ▼
  announcementView.js (HTML Template Rendering & XSS Escaping)
@@ -378,7 +466,7 @@ apiAnnouncementRoutes.js (Endpoint Matching: GET, POST, PUT, DELETE)
 apiAnnouncementController.js (Request Parsing & Validation)
        │
        ▼
- announcementModel.js (In-Memory Array Operations)
+ announcementModel.js (MySQL Database via db.js Pool)
        │
        ▼
  JSON Response ({ id: 1, title: "...", content: "...", createdAt: "..." })
@@ -388,12 +476,13 @@ apiAnnouncementController.js (Request Parsing & Validation)
 
 ### 7. Current Architecture Assessment
 
-* **Modular MVC Structure:** The application now fully follows a modular, decoupled MVC-style architecture for both User and Announcement operations. Model, View, Controller, and Route responsibilities are cleanly isolated into dedicated files and directories.
-* **Separation of Concerns in `app.js`:** User and Announcement CRUD and data management logic no longer reside inside `app.js`. `app.js` now serves strictly as the application entry point responsible for:
+* **Modular MVC Structure:** The application fully follows a modular, decoupled MVC architecture for both User and Announcement operations. Model, View, Controller, and Route responsibilities are cleanly isolated into dedicated files and directories.
+* **Separation of Concerns in `app.js`:** User and Announcement CRUD and data management logic no longer reside inside `app.js`. `app.js` serves strictly as the application entry point responsible for:
   * Initializing the Express instance.
   * Registering global middleware (`cors`, `express.json`, `express.urlencoded`).
   * Mounting route modules (`app.use('/users', userRoutes)`, `app.use('/api/users', apiUserRoutes)`, `app.use('/announcements', announcementRoutes)`, `app.use('/api/announcements', apiAnnouncementRoutes)`, `app.use('/alumni', alumniRoutes)`).
   * Configuring OpenAPI 3.0 specifications and serving Swagger UI (`/api/swagger`).
   * Starting the HTTP server on the configured port.
-* **Database Readiness:** By encapsulating all data operations in `models/userModel.js` and `models/announcementModel.js`, the application is well-prepared to integrate persistent databases (e.g., PostgreSQL, MongoDB) or ORMs in future iterations without altering controller, route, or view implementations.
+* **Database Persistence Achieved:** The transition from temporary in-memory arrays to persistent MySQL 8.0 relational database storage is complete. Both models query MySQL via parameterized prepared statements (`?`), all controller handlers asynchronously coordinate operations using `await`, and data persists across Docker container and server restarts via the named volume `mysql_data`.
+* **Containerization & Reproducibility:** The complete stack is Dockerized via `docker-compose.yml` and `backend/Dockerfile`. The backend container waits for MySQL healthiness before booting, guaranteeing robust and reproducible deployments across development and production environments.
 
