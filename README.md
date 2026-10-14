@@ -103,10 +103,16 @@ Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki ta
 | HTTP Metodu | Endpoint | Açıklama | Başarılı Durum | Hata Durumu |
 | :--- | :--- | :--- | :--- | :--- |
 | **`GET`** | `/api/health` | Sunucu sağlık ve aktiflik kontrolünü yapar | `200 OK` | - |
-| **`GET`** | `/api/users` | Sistemdeki tüm kullanıcıları liste olarak döner | `200 OK` | - |
-| **`POST`** | `/api/users` | Yeni bir kullanıcı kaydeder (Otomatik artan ID atar) | `201 Created` | - |
+| **`GET`** | `/users` | Kullanıcı listesi ve yönetim arayüzü (HTML View) | `200 OK` | - |
+| **`POST`** | `/users` | Yeni bir kullanıcı ekler (HTML View) | `201 Created` | `409 Conflict` |
+| **`GET`** | `/users/:id` | ID'si verilen kullanıcının detay sayfasını sunar (HTML View) | `200 OK` | `404 Not Found` |
+| **`PUT`** | `/users/:id` | Kullanıcının tüm bilgilerini günceller (HTML / Fetch) | `200 OK` | `404 Not Found`, `409 Conflict` |
+| **`PATCH`** | `/users/:id` | Kullanıcının alanlarını kısmi olarak günceller (HTML View) | `200 OK` | `404 Not Found`, `409 Conflict` |
+| **`DELETE`** | `/users/:id` | Belirtilen kullanıcıyı sistemden siler (HTML View) | `200 OK` / `204 No Content` | `404 Not Found` |
+| **`GET`** | `/api/users` | Sistemdeki tüm kullanıcıları liste olarak döner (JSON) | `200 OK` | - |
+| **`POST`** | `/api/users` | Yeni bir kullanıcı kaydeder (Otomatik artan ID atar) | `201 Created` | `409 Conflict` |
 | **`GET`** | `/api/users/:id` | ID'si verilen belirli bir kullanıcının detaylarını getirir | `200 OK` | `404 Not Found` |
-| **`PUT`** | `/api/users/:id` | Belirtilen kullanıcının tüm bilgilerini günceller (ID korunur) | `200 OK` | `404 Not Found` |
+| **`PUT`** | `/api/users/:id` | Belirtilen kullanıcının tüm bilgilerini günceller (ID korunur) | `200 OK` | `404 Not Found`, `409 Conflict` |
 | **`PATCH`** | `/api/users/:id` | Belirtilen kullanıcının sadece gönderilen alanlarını günceller | `200 OK` | `404 Not Found` |
 | **`DELETE`** | `/api/users/:id` | Belirtilen ID'ye sahip kullanıcıyı sistemden siler | `204 No Content` | `404 Not Found` |
 | **`GET`** | `/announcements` | Duyuru listesi ve yönetim arayüzü (HTML View) | `200 OK` | - |
