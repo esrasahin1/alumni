@@ -20,19 +20,236 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 1. Ana Sayfa (GET /) - Temporary One Main Page
+// 1. Ana Sayfa (GET /) - Alumni Tracking System Portal Dashboard
 app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(`<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>Alumni Tracking System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alumni Tracking System - Portal Dashboard</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f4f6f9;
+      margin: 0;
+      padding: 30px 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      padding: 36px;
+    }
+    .nav-links {
+      margin-bottom: 24px;
+      font-size: 14px;
+      border-bottom: 1px solid #edf2f7;
+      padding-bottom: 14px;
+    }
+    .nav-links a {
+      color: #3182ce;
+      text-decoration: none;
+      margin-right: 16px;
+      font-weight: 500;
+    }
+    .nav-links a:hover {
+      text-decoration: underline;
+    }
+    .header {
+      margin-bottom: 28px;
+    }
+    h1 {
+      color: #1a365d;
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .lead {
+      color: #4a5568;
+      font-size: 15px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .badge {
+      display: inline-block;
+      background: #ebf8ff;
+      color: #2b6cb0;
+      padding: 4px 12px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 600;
+      vertical-align: middle;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 20px;
+      margin-top: 24px;
+    }
+    .card {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+    }
+    .card h2 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 19px;
+      color: #2b6cb0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card p {
+      color: #4a5568;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-top: 0;
+      margin-bottom: 18px;
+      flex-grow: 1;
+    }
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block;
+      background-color: #3182ce;
+      color: #ffffff;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .btn:hover { background-color: #2b6cb0; }
+    .btn-secondary { background-color: #edf2f7; color: #4a5568; border: 1px solid #cbd5e0; }
+    .btn-secondary:hover { background-color: #e2e8f0; color: #2d3748; }
+    .btn-success { background-color: #38a169; color: #fff; }
+    .btn-success:hover { background-color: #2f855a; }
+    .footer-info {
+      margin-top: 36px;
+      padding-top: 20px;
+      border-top: 1px solid #edf2f7;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: #718096;
+      font-size: 13px;
+    }
+  </style>
 </head>
 <body>
-  <h1>Alumni Tracking System</h1>
-  <p>Mezunlarımızı ve öğrencilerimizi bir araya getiren kariyer ve iletişim takip platformu.</p>
-  <p><strong>Temporary One Main Page</strong></p>
+  <div class="container">
+    <div class="nav-links">
+      <a href="/">🏠 Ana Sayfa</a>
+      <a href="/users">👥 Kullanıcılar</a>
+      <a href="/announcements">📢 Duyurular</a>
+      <a href="/job-postings">💼 İş İlanları</a>
+      <a href="/applications">📝 Başvurular</a>
+      <a href="/api/swagger" target="_blank">📖 Swagger UI</a>
+    </div>
+
+    <div class="header">
+      <h1>🎓 Alumni Tracking System <span class="badge">Yönetim &amp; Takip Portalı</span></h1>
+      <p class="lead">Mezunlar, öğrenciler ve kariyer fırsatlarını bir araya getiren merkezi yönetim platformu.</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div>
+          <h2>👥 Kullanıcılar</h2>
+          <p>Kayıtlı mezun ve öğrenci profillerini listeleyin, yeni kullanıcı ekleyin veya kullanıcı bilgilerini düzenleyin.</p>
+        </div>
+        <div class="btn-group">
+          <a href="/users" class="btn">Kullanıcı Sayfası</a>
+          <a href="/api/users" target="_blank" class="btn btn-secondary">JSON API</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div>
+          <h2>📢 Duyurular</h2>
+          <p>Üniversite, kariyer ve mezunlar arası duyuru ve etkinlikleri yayınlayın, güncelleyin veya kaldırın.</p>
+        </div>
+        <div class="btn-group">
+          <a href="/announcements" class="btn">Duyuru Sayfası</a>
+          <a href="/api/announcements" target="_blank" class="btn btn-secondary">JSON API</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div>
+          <h2>💼 İş İlanları</h2>
+          <p>Açık pozisyon ve staj ilanlarını yayınlayın, şirket detaylarını görüntüleyin ve ilana gelen başvuruları inceleyin.</p>
+        </div>
+        <div class="btn-group">
+          <a href="/job-postings" class="btn">İlanlar Sayfası</a>
+          <a href="/api/job-postings" target="_blank" class="btn btn-secondary">JSON API</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div>
+          <h2>📝 Başvurular</h2>
+          <p>İş ilanlarına yapılan aday başvurularını takip edin, CV bağlantılarını inceleyin ve başvuru durumlarını yönetin.</p>
+        </div>
+        <div class="btn-group">
+          <a href="/applications" class="btn">Başvuru Sayfası</a>
+          <a href="/api/applications" target="_blank" class="btn btn-secondary">JSON API</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div>
+          <h2>📖 Swagger API Dokümantasyonu</h2>
+          <p>Tüm REST API endpoint'lerini interaktif Swagger / OpenAPI 3.0 arayüzü ile canlı olarak keşfedin ve test edin.</p>
+        </div>
+        <div class="btn-group">
+          <a href="/api/swagger" target="_blank" class="btn btn-success">Swagger UI'ı Aç</a>
+          <a href="/api/swagger/doc.json" target="_blank" class="btn btn-secondary">doc.json</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div>
+          <h2>🩺 Sistem Sağlığı</h2>
+          <p>API servisinin ve veritabanı bağlantı havuzunun anlık durumunu sağlık endpoint'i üzerinden kontrol edin.</p>
+        </div>
+        <div class="btn-group">
+          <a href="/api/health" target="_blank" class="btn btn-secondary">Sağlık Kontrolü (Health)</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-info">
+      <div>Mimarî: <strong>Node.js &amp; Express MVC</strong> (Model-View-Controller)</div>
+      <div>Veritabanı: <strong>MySQL 8.0 Persistence</strong></div>
+    </div>
+  </div>
 </body>
 </html>`);
 });

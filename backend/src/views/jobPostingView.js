@@ -148,6 +148,8 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
     .btn:hover { background-color: #2b6cb0; }
     .btn-secondary { background-color: #edf2f7; color: #4a5568; }
     .btn-secondary:hover { background-color: #e2e8f0; }
+    .btn-success { background-color: #38a169; color: #fff; }
+    .btn-success:hover { background-color: #2f855a; }
     .btn-danger { background-color: #e53e3e; color: #fff; }
     .btn-danger:hover { background-color: #c53030; }
     .btn-sm {
@@ -168,6 +170,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       <a href="/users">👥 Kullanıcılar</a>
       <a href="/announcements">📢 Duyurular</a>
       <a href="/job-postings">💼 İş İlanları</a>
+      <a href="/applications">📝 Başvurular</a>
       <a href="/api/job-postings" target="_blank">🔌 API JSON</a>
       <a href="/api/swagger" target="_blank">📑 Swagger UI</a>
     </div>
@@ -196,6 +199,7 @@ const renderJobPostingsPage = (jobPostings = []) => {
         <td class="text-muted">${escapeHtml(job.createdDate || job.createdAt || job.created_at || '-')}</td>
         <td class="actions">
           <a href="/job-postings/${escapeHtml(job.id)}" class="btn btn-secondary btn-sm">Detay</a>
+          <a href="/job-postings/${escapeHtml(job.id)}/applications" class="btn btn-secondary btn-sm">Başvurular</a>
           <button onclick="editJob(${escapeHtml(JSON.stringify(job))})" class="btn btn-secondary btn-sm">Düzenle</button>
           <button onclick="deleteJob(${escapeHtml(job.id)})" class="btn btn-danger btn-sm">Sil</button>
         </td>
@@ -327,13 +331,23 @@ const renderJobPostingDetailPage = (job) => {
       <h3>Açıklama ve Nitelikler</h3>
       <div style="white-space: pre-wrap; line-height: 1.6; color: #4a5568;">${escapeHtml(job.description)}</div>
     </div>
-    <div>
+
+    <div class="card" style="background: #edf2f7; border-color: #cbd5e0; margin-top: 20px;">
+      <h3 style="margin-top: 0; color: #2d3748;">📌 Bu İlan İçin Başvuru İşlemleri</h3>
+      <p style="margin-bottom: 16px; color: #4a5568;">Bu pozisyona yapılan başvuruları listeleyebilir veya doğrudan yeni bir başvuru formu doldurabilirsiniz.</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        <a href="/job-postings/${escapeHtml(job.id)}/applications" class="btn">📋 Bu İlanın Başvurularını Gör</a>
+        <a href="/job-postings/${escapeHtml(job.id)}/applications#apply" class="btn btn-success">✍️ Bu İlana Başvur</a>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
       <a href="/job-postings" class="btn btn-secondary">← Tüm İlanlara Dön</a>
-      <button onclick="deleteJobDetail(${escapeHtml(job.id)})" class="btn btn-danger" style="margin-left: 8px;">Bu İlanı Sil</button>
+      <button onclick="deleteJobDetail(${escapeHtml(job.id)})" class="btn btn-danger">Bu İlanı Sil</button>
     </div>
     <script>
       function deleteJobDetail(id) {
-        if (confirm('#' + id + ' numaralı iş ilanını silmek istediğinize emin misiniz?')) {
+        if (confirm('#' + id + ' numaralı iş ilanını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) {
           fetch('/job-postings/' + id, {
             method: 'DELETE',
             headers: { 'Accept': 'text/html' }

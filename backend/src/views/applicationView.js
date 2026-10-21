@@ -127,11 +127,21 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
     .btn-secondary:hover {
       background-color: #4a5568;
     }
+    .btn-success {
+      background-color: #38a169;
+    }
+    .btn-success:hover {
+      background-color: #2f855a;
+    }
     .btn-danger {
       background-color: #e53e3e;
     }
     .btn-danger:hover {
       background-color: #c53030;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
     }
     .card {
       border: 1px solid #e2e8f0;
@@ -212,8 +222,8 @@ const renderApplicationsPage = (applications = [], options = {}) => {
     : `📝 İş Başvuruları`;
 
   const subHeader = isNested
-    ? `<p style="color: #4a5568;">Bu liste <strong>#${escapeHtml(job.id)} — ${escapeHtml(job.company)}</strong> ilanına ait başvuruları göstermektedir. <a href="/job-postings/${escapeHtml(job.id)}">← İlan Detayına Dön</a></p>`
-    : `<p style="color: #4a5568;">Sistemde kayıtlı olan tüm aday iş başvuruları aşağıda listelenmiştir.</p>`;
+    ? `<p style="color: #4a5568;">Bu liste <strong>#${escapeHtml(job.id)} — ${escapeHtml(job.company)}</strong> ilanına ait başvuruları göstermektedir. <a href="/job-postings/${escapeHtml(job.id)}" class="btn btn-secondary btn-sm" style="margin-left: 6px;">← İlan Detayına Dön</a> <a href="#apply" class="btn btn-sm" style="margin-left: 6px;">✍️ Bu İlana Başvur</a></p>`
+    : `<p style="color: #4a5568;">Sistemde kayıtlı olan tüm aday iş başvuruları aşağıda listelenmiştir. <a href="/job-postings" class="btn btn-secondary btn-sm" style="margin-left: 6px;">💼 Tüm İş İlanlarına Git</a> <a href="#apply" class="btn btn-sm" style="margin-left: 6px;">➕ Yeni Başvuru Gönder</a></p>`;
 
   const postTargetUrl = isNested
     ? `/job-postings/${escapeHtml(job.id)}/applications`
@@ -231,7 +241,7 @@ const renderApplicationsPage = (applications = [], options = {}) => {
         <td>${app.resume_url ? `<a href="${escapeHtml(app.resume_url)}" target="_blank" rel="noopener">CV Linki</a>` : '<span style="color:#a0aec0;">Yok</span>'}</td>
         <td>${escapeHtml(app.createdAt ? app.createdAt.substring(0, 10) : '')}</td>
         <td>
-          <a href="/applications/${escapeHtml(app.id)}" class="btn" style="padding: 4px 10px; font-size: 12px;">Detay</a>
+          <a href="/applications/${escapeHtml(app.id)}" class="btn" style="padding: 4px 10px; font-size: 12px;">Detay & Yönet</a>
         </td>
       </tr>
     `).join('');
@@ -263,7 +273,7 @@ const renderApplicationsPage = (applications = [], options = {}) => {
       </table>
     </div>
 
-    <div class="card" style="margin-top: 36px;">
+    <div class="card" id="apply" style="margin-top: 36px;">
       <h2>➕ Yeni Başvuru Gönder</h2>
       <form action="${postTargetUrl}" method="POST">
         ${isNested ? `<input type="hidden" name="job_posting_id" value="${escapeHtml(job.id)}">` : `
@@ -311,7 +321,7 @@ const renderApplicationDetailPage = (application) => {
         <h2 style="margin: 0;">${escapeHtml(application.applicant_name)}</h2>
         ${getStatusBadge(application.status)}
       </div>
-      <p><strong>Hedef İş İlanı:</strong> <a href="/job-postings/${escapeHtml(application.job_posting_id)}">İş İlanı #${escapeHtml(application.job_posting_id)}</a></p>
+      <p><strong>Hedef İş İlanı:</strong> <a href="/job-postings/${escapeHtml(application.job_posting_id)}" style="color: #3182ce; font-weight: 600;">İş İlanı #${escapeHtml(application.job_posting_id)}</a></p>
       <p><strong>E-posta:</strong> <a href="mailto:${escapeHtml(application.applicant_email)}">${escapeHtml(application.applicant_email)}</a></p>
       <p><strong>Kullanıcı Referansı:</strong> ${application.user_id ? `<a href="/users/${escapeHtml(application.user_id)}">User #${escapeHtml(application.user_id)}</a>` : '<span style="color:#718096;">Misafir / Bağımsız Başvuru</span>'}</p>
       <p><strong>Özgeçmiş (CV):</strong> ${application.resume_url ? `<a href="${escapeHtml(application.resume_url)}" target="_blank" rel="noopener">📄 Görüntüle / İndir</a>` : 'Belirtilmedi'}</p>
@@ -320,12 +330,72 @@ const renderApplicationDetailPage = (application) => {
       <p style="color: #718096; font-size: 13px; margin-top: 16px;">
         Başvuru Tarihi: ${escapeHtml(application.createdAt || '')} | Son Güncelleme: ${escapeHtml(application.updated_at || '')}
       </p>
-
-      <div style="margin-top: 24px; display: flex; gap: 10px;">
-        <a href="/applications" class="btn btn-secondary">← Tüm Başvurular</a>
-        <a href="/job-postings/${escapeHtml(application.job_posting_id)}/applications" class="btn btn-secondary">Bu İlanın Başvuruları</a>
-      </div>
     </div>
+
+    <div class="card" style="background: #edf2f7; border-color: #cbd5e0; margin-top: 20px;">
+      <h3 style="margin-top: 0; color: #2d3748;">⚙️ Başvuru Durumunu Güncelle (PATCH)</h3>
+      <p style="color: #4a5568; font-size: 14px; margin-bottom: 14px;">Mevcut durum: ${getStatusBadge(application.status)}</p>
+      <form id="statusForm" onsubmit="updateStatus(event, ${escapeHtml(application.id)})" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        <label for="statusSelect" style="margin: 0; font-weight: 600;">Yeni Durum Seçin:</label>
+        <select id="statusSelect" name="status" style="width: auto; min-width: 200px; padding: 8px 12px; font-weight: 600;">
+          <option value="PENDING" ${application.status === 'PENDING' ? 'selected' : ''}>⏳ PENDING (Beklemede)</option>
+          <option value="REVIEWING" ${application.status === 'REVIEWING' ? 'selected' : ''}>🔍 REVIEWING (İnceleniyor)</option>
+          <option value="ACCEPTED" ${application.status === 'ACCEPTED' ? 'selected' : ''}>✅ ACCEPTED (Kabul Edildi)</option>
+          <option value="REJECTED" ${application.status === 'REJECTED' ? 'selected' : ''}>❌ REJECTED (Reddedildi)</option>
+        </select>
+        <button type="submit" id="updateStatusBtn" class="btn">Durumu Kaydet</button>
+      </form>
+    </div>
+
+    <div style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+      <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        <a href="/applications" class="btn btn-secondary">← Tüm Başvurular</a>
+        <a href="/job-postings/${escapeHtml(application.job_posting_id)}" class="btn btn-secondary">💼 İlgili İlan (#${escapeHtml(application.job_posting_id)})</a>
+        <a href="/job-postings/${escapeHtml(application.job_posting_id)}/applications" class="btn btn-secondary">📋 Bu İlanın Tüm Başvuruları</a>
+      </div>
+      <button onclick="deleteApplication(${escapeHtml(application.id)})" class="btn btn-danger">🗑️ Başvuruyu Sil</button>
+    </div>
+
+    <script>
+      function updateStatus(event, id) {
+        event.preventDefault();
+        var select = document.getElementById('statusSelect');
+        var newStatus = select.value;
+        var btn = document.getElementById('updateStatusBtn');
+        btn.disabled = true;
+        btn.innerText = 'Güncelleniyor...';
+
+        fetch('/applications/' + id, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ status: newStatus })
+        }).then(function(res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          window.location.reload();
+        }).catch(function(err) {
+          alert('Durum güncellenirken hata oluştu: ' + err.message);
+          btn.disabled = false;
+          btn.innerText = 'Durumu Kaydet';
+        });
+      }
+
+      function deleteApplication(id) {
+        if (confirm('#' + id + ' numaralı başvuruyu silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) {
+          fetch('/applications/' + id, {
+            method: 'DELETE',
+            headers: { 'Accept': 'text/html' }
+          }).then(function(res) {
+            if (!res.ok && res.status !== 204) throw new Error('HTTP ' + res.status);
+            window.location.href = '/applications';
+          }).catch(function(err) {
+            alert('Başvuru silinirken hata oluştu: ' + err.message);
+          });
+        }
+      }
+    </script>
   `;
 
   return getLayout(`Başvuru #${application.id}`, 'Detay', content);

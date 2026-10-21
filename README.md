@@ -96,6 +96,38 @@ Sunucu varsayılan olarak **`http://localhost:3000`** adresinde çalışmaya ba�
 
 ---
 
+## 🖥️ Kullanıcı Arayüzü (Web UI) ve Sayfa Erişimleri
+
+Sistem, tarayıcı üzerinden doğrudan kullanılabilen ve JavaScript gerektirmeyen temel CRUD işlemlerini destekleyen sunucu taraflı render (SSR - Server-Side Rendered) HTML yönetim arayüzlerine sahiptir.
+
+### 🚀 Uygulamayı Başlatma ve Erişim
+
+1. **Docker Compose ile (Önerilen):**
+   ```bash
+   docker compose up -d
+   ```
+2. **Yerel Node.js ile:**
+   ```bash
+   cd backend
+   npm start
+   ```
+
+Sunucu ayağa kalktıktan sonra aşağıdaki web arayüzlerine tarayıcınızdan doğrudan erişebilirsiniz:
+
+| Sayfa / Modül | URL Adresi | Desteklenen UI Eylemleri ve Açıklama |
+| :--- | :--- | :--- |
+| **Ana Portal Dashboard** | [http://localhost:3000/](http://localhost:3000/) | Kullanıcılar, Duyurular, İş İlanları, Başvurular ve Swagger dokümantasyonuna hızlı erişim sağlayan merkezi dashboard. |
+| **Kullanıcı Yönetimi** | [http://localhost:3000/users](http://localhost:3000/users) | Tüm mezun ve öğrencileri listeleme, yeni kullanıcı oluşturma, detay görüntüleme, güncelleme ve silme. |
+| **Duyuru Yönetimi** | [http://localhost:3000/announcements](http://localhost:3000/announcements) | Duyuru listesi, yeni duyuru yayınlama, detay inceleme, düzenleme ve silme. |
+| **İş İlanları (Job Postings)** | [http://localhost:3000/job-postings](http://localhost:3000/job-postings) | Aktif iş ve staj ilanlarını listeleme, yeni ilan yayınlama, düzenleme ve silme. Tablo üzerinden doğrudan ilanın başvurularına erişim. |
+| **İş İlanı Detay Sayfası** | [http://localhost:3000/job-postings/:id](http://localhost:3000/job-postings/1) | Seçilen iş ilanının tam açıklaması, iletişim bilgileri, **ilana ait başvuruları görüntüleme butonu**, **doğrudan bu ilana başvur butonu** ve ilanı silme aksiyonu. |
+| **İlana Özel Başvurular (Nested)** | [http://localhost:3000/job-postings/:jobPostingId/applications](http://localhost:3000/job-postings/1/applications) | Belirli bir iş ilanına gelen başvuruların filtrelenmiş listesi ve sayfa altında o ilana ait otomatik doldurulan **hızlı başvuru formu (`#apply`)**. |
+| **Tüm Başvurular (Applications)** | [http://localhost:3000/applications](http://localhost:3000/applications) | Sistemdeki tüm aday iş başvurularının genel listesi, iş ilanı bağlantıları, CV görüntüleme ve yeni başvuru formu. |
+| **Başvuru Detay & Yönetim** | [http://localhost:3000/applications/:id](http://localhost:3000/applications/1) | Başvuru detayları, ön yazı, CV bağlantısı, **başvuru durumunu güncelleme kontrolü** (`PATCH`: `PENDING`, `REVIEWING`, `ACCEPTED`, `REJECTED`) ve **başvuruyu silme butonu** (`DELETE`). |
+| **Swagger UI (REST API)** | [http://localhost:3000/api/swagger](http://localhost:3000/api/swagger) | Tüm backend REST API uç noktalarını interaktif olarak inceleme ve canlı test etme arayüzü. |
+
+---
+
 ## 🔌 API Endpointleri
 
 Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki tabloda listelenmiştir:
@@ -139,6 +171,22 @@ Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki ta
 | **`PUT`** | `/api/job-postings/:id` | İş ilanının tüm bilgilerini günceller (ID korunur) | `200 OK` | `400 Bad Request`, `404 Not Found` |
 | **`PATCH`** | `/api/job-postings/:id` | İş ilanının alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
 | **`DELETE`** | `/api/job-postings/:id` | Belirtilen ID'ye sahip iş ilanını siler | `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/applications` | Başvuru listesi ve yeni başvuru formu arayüzü (HTML View) | `200 OK` | - |
+| **`POST`** | `/applications` | Yeni bir başvuru gönderir (HTML View) | `201 Created` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/applications/:id` | ID'si verilen başvurunun detay sayfasını sunar (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/applications/:id` | Başvurunun tüm bilgilerini günceller (HTML / Fetch) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/applications/:id` | Başvurunun durum veya alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/applications/:id` | Belirtilen başvuruyu sistemden siler | `200 OK` / `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına ait başvuruları listeler (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`POST`** | `/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına yeni başvuru oluşturur (HTML View) | `201 Created` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/applications` | Sistemdeki tüm başvuruları JSON listesi olarak döner | `200 OK` | - |
+| **`POST`** | `/api/applications` | Yeni bir başvuru kaydeder (JSON) | `201 Created` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/applications/:id` | ID'si verilen başvurunun detaylarını getirir (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/api/applications/:id` | Başvurunun tüm bilgilerini günceller (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/api/applications/:id` | Başvuru durum veya alanlarını kısmi olarak günceller (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/api/applications/:id` | Belirtilen ID'ye sahip başvuruyu siler | `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına ait başvuruları JSON listesi olarak döner | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`POST`** | `/api/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına JSON başvurusu oluşturur | `201 Created` | `400 Bad Request`, `404 Not Found` |
 | **`GET`** | `/api/swagger` | İnteraktif Swagger UI dokümantasyon ekranını sunar | `200 OK` | - |
 
 ---
@@ -218,39 +266,47 @@ backend/src/
 │   ├── alumniController.js
 │   ├── announcementController.js
 │   ├── apiAnnouncementController.js
+│   ├── apiApplicationController.js
 │   ├── apiJobPostingController.js
 │   ├── apiUserController.js
+│   ├── applicationController.js
 │   ├── jobPostingController.js
 │   └── userController.js
 ├── database/
 │   ├── factories/
 │   │   ├── announcementFactory.js
+│   │   ├── jobPostingFactory.js
 │   │   └── userFactory.js
-├── database/
 │   ├── migrations/
 │   │   ├── 001_create_users_table.js
 │   │   ├── 002_create_announcements_table.js
-│   │   └── 003_create_job_postings_table.js
+│   │   ├── 003_create_job_postings_table.js
+│   │   └── 004_create_applications_table.js
 │   ├── seeds/
 │   │   ├── 001_seed_users.js
-│   │   └── 002_seed_announcements.js
+│   │   ├── 002_seed_announcements.js
+│   │   └── jobPostingSeeder.js
 │   ├── migrate.js
 │   └── seed.js
 ├── models/
 │   ├── announcementModel.js
+│   ├── applicationModel.js
 │   ├── jobPostingModel.js
 │   └── userModel.js
 ├── routes/
 │   ├── alumniRoutes.js
 │   ├── announcementRoutes.js
 │   ├── apiAnnouncementRoutes.js
+│   ├── apiApplicationRoutes.js
 │   ├── apiJobPostingRoutes.js
 │   ├── apiUserRoutes.js
+│   ├── applicationRoutes.js
 │   ├── jobPostingRoutes.js
 │   └── userRoutes.js
 ├── views/
 │   ├── announcementView.js
 │   ├── apiUserView.js
+│   ├── applicationView.js
 │   ├── jobPostingView.js
 │   └── userView.js
 └── app.js
