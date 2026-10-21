@@ -13,7 +13,7 @@ Sistem, mezunlar ve öğrenciler arasındaki iletişimi güçlendirmeyi, kariyer
 * **Çalışma Ortamı:** Node.js (v20+)
 * **Web Framework:** Express.js (v4.19)
 * **Dokümantasyon & Test Arayüzü:** Swagger UI (`swagger-ui-express` ve OpenAPI 3.0)
-* **Veritabanı & Kalıcılık:** MySQL 8.0, `mysql2` (`mysql2/promise` Connection Pool), Docker Named Volume (`alumni_mysql_data`)
+* **Veritabanı & Kalıcılık:** MySQL 8.0, `mysql2` (`mysql2/promise` Connection Pool), Docker Named Volume (`docker-compose.yml` mantıksal adı: `mysql_data`, proje adına bağlı oluşturulan fiziksel ad: `alumni_mysql_data`)
 * **Migrasyon & Seeder:** Node.js tabanlı Migration Runner (`backend/src/database/migrate.js`) ve Idempotent Seeder (`backend/src/database/seed.js`)
 * **Konteynerizasyon:** Docker, Docker Compose (Multi-container: `db` + `backend`)
 * **Ara Katmanlar (Middleware):** CORS, Express JSON Parser, Express URL-Encoded Parser
@@ -287,9 +287,9 @@ backend/src/
 │   │   ├── 003_create_job_postings_table.js
 │   │   └── 004_create_applications_table.js
 │   ├── seeds/
-│   │   ├── 001_seed_users.js
-│   │   ├── 002_seed_announcements.js
-│   │   └── jobPostingSeeder.js
+│   │   ├── announcementSeeder.js
+│   │   ├── jobPostingSeeder.js
+│   │   └── userSeeder.js
 │   ├── migrate.js
 │   └── seed.js
 ├── models/
@@ -395,17 +395,19 @@ backend/src/
   * **`deleteJobPosting(id)`**: Removes the job posting record (`DELETE FROM job_postings WHERE id = ?`) and returns a boolean success flag (`true`/`false`).
 
 #### Application Model (`models/applicationModel.js`):
-* **MySQL Database Persistence & Relational Design:**
-  Application data is stored persistently in the `applications` table of MySQL 8.0 (`alumni_db`). It implements relational links with parent entities:
-  * Foreign key `job_posting_id` referencing `job_postings(id)` with `ON DELETE CASCADE`.
-  * Optional foreign key `user_id` referencing `users(id)` with `ON DELETE SET NULL`.
+* **MySQL Database Persistence & Application-Level References:**
+  Application data is stored persistently in the `applications` table of MySQL 8.0 (`alumni_db`). In alignment with the decoupled architecture documented in `ddd.md`:
+  * Migration files do not define database-level `FOREIGN KEY ... REFERENCES` constraints.
+  * Relational integrity is validated and maintained directly at the application and controller level (`applicationController.js` and `apiApplicationController.js` verify that `job_posting_id` exists in `job_postings` before creation or update).
+  * `job_posting_id` is an `INT UNSIGNED NOT NULL` column referencing the target job posting.
+  * `user_id` is an `INT UNSIGNED NULL` column referencing an optional registered user (nullable to permit guest/unauthenticated candidate submissions without active session dependencies).
 * **Table Schema & Attributes:**
   * `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
-  * `job_posting_id`: `INT UNSIGNED NOT NULL` (Foreign key to `job_postings.id`)
-  * `user_id`: `INT UNSIGNED NULL` (Optional foreign key to `users.id`)
+  * `job_posting_id`: `INT UNSIGNED NOT NULL` (Target job posting reference, validated at controller level)
+  * `user_id`: `INT UNSIGNED NULL` (Optional registered user reference, nullable for guest applicants)
   * `applicant_name`: `VARCHAR(255) NOT NULL`
   * `applicant_email`: `VARCHAR(255) NOT NULL`
-  * `resume_url`: `VARCHAR(500) NULL`
+  * `resume_url`: `VARCHAR(255) NULL`
   * `cover_letter`: `TEXT NULL`
   * `status`: `VARCHAR(50) NOT NULL DEFAULT 'PENDING'` (Supports standard statuses: `PENDING`, `REVIEWING`, `ACCEPTED`, `REJECTED`)
   * `created_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
@@ -781,6 +783,6 @@ apiApplicationController.js (Request Parsing, Status Check & Validation)
   * Registering nested routes (`/job-postings/:jobPostingId/applications` and `/api/job-postings/:jobPostingId/applications`).
   * Configuring OpenAPI 3.0 specifications and serving Swagger UI (`/api/swagger`).
   * Starting the HTTP server on the configured port.
-* **Database Persistence Achieved:** The transition from temporary in-memory arrays to persistent MySQL 8.0 relational database storage is complete for all four tables (`users`, `announcements`, `job_postings`, `applications`). All models query MySQL via parameterized prepared statements (`?`), all controller handlers asynchronously coordinate operations using `await`, and data persists across Docker container and server restarts via the named volume `mysql_data`.
+* **Database Persistence Achieved:** The transition from temporary in-memory arrays to persistent MySQL 8.0 relational database storage is complete for all four tables (`users`, `announcements`, `job_postings`, `applications`). All models query MySQL via parameterized prepared statements (`?`), all controller handlers asynchronously coordinate operations using `await`, and data persists across Docker container and server restarts via the named volume `mysql_data` (Docker Compose tarafından proje önekiyle `alumni_mysql_data` olarak adlandırılır).
 * **Containerization & Reproducibility:** The complete stack is Dockerized via `docker-compose.yml` and `backend/Dockerfile`. The backend container waits for MySQL healthiness before booting, guaranteeing robust and reproducible deployments across development and production environments.
 

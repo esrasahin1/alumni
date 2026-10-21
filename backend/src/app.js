@@ -351,6 +351,40 @@ const swaggerDocument = {
         }
       }
     },
+    "/health": {
+      get: {
+        tags: ["Health"],
+        summary: "Alternatif sunucu sağlık kontrolü",
+        description: "Alternatif kök seviyesinde çalışan sunucu sağlık kontrolü endpoint'i.",
+        responses: {
+          "200": {
+            description: "Sunucu aktif ve sağlıklı",
+            content: {
+              "application/json": {
+                example: { status: "ok" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alumni": {
+      get: {
+        tags: ["Alumni"],
+        summary: "Mezunlar ana durum kontrolü",
+        description: "alumniRoutes üzerinden temel servis durumunu ('OK') döner.",
+        responses: {
+          "200": {
+            description: "Servis aktif yanıtı",
+            content: {
+              "text/plain": {
+                example: "OK"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/users": {
       get: {
         tags: ["ApiUser"],
