@@ -174,14 +174,11 @@ The `Job Posting` entity represents career opportunities, job listings, and inte
 
 ---
 
-### 3.4. Application Entity (Proposed)
+### 3.4. Application Entity
 
 The `Application` entity represents job applications submitted by candidates (students or alumni) for specific career opportunities.
 
-> [!NOTE]
-> The `applications` entity specification represents a proposed design for Task 5. The physical database table and migration files are not yet created.
-
-* **Target Database Table:** `applications` (Proposed)
+* **Target Database Table:** `applications`
 * **Storage Engine:** InnoDB (`utf8mb4_unicode_ci`)
 * **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 
@@ -244,7 +241,7 @@ Tracks executed migrations to ensure idempotency.
 
 ### Relationship Status: **Decoupled Entities with Application-Level References**
 
-Based on the active database implementation and proposed Application architecture:
+Based on the active database implementation and Application architecture:
 
 ```mermaid
 classDiagram
@@ -324,13 +321,13 @@ All data operations are asynchronous (`async/await`) and execute parameterized S
 | **Job Posting** | **Update (Full)**| `updateJobPosting(id, data)` | `PUT /job-postings/:id`<br>`PUT /api/job-postings/:id` | `UPDATE job_postings SET title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?` |
 | **Job Posting** | **Update (Part)**| `patchJobPosting(id, part)` | `PATCH /job-postings/:id`<br>`PATCH /api/job-postings/:id` | `UPDATE job_postings SET title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?` *(retains untouched fields)* |
 | **Job Posting** | **Delete** | `deleteJobPosting(id)` | `DELETE /job-postings/:id`<br>`DELETE /api/job-postings/:id` | `DELETE FROM job_postings WHERE id = ?` |
-| **Application (Proposed)** | **Create** | `createApplication(data)` | `POST /applications`<br>`POST /api/applications`<br>`POST /api/job-postings/:jobId/applications` | `INSERT INTO applications (job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status) VALUES (?, ?, ?, ?, ?, ?, ?)` |
-| **Application (Proposed)** | **Read (All)** | `getAllApplications()` | `GET /applications`<br>`GET /api/applications` | `SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications ORDER BY id ASC` |
-| **Application (Proposed)** | **Read (By Job)** | `getApplicationsByJobPostingId(jobId)` | `GET /job-postings/:jobId/applications`<br>`GET /api/job-postings/:jobId/applications` | `SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications WHERE job_posting_id = ? ORDER BY id ASC` |
-| **Application (Proposed)** | **Read (One)** | `getApplicationById(id)` | `GET /applications/:id`<br>`GET /api/applications/:id` | `SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications WHERE id = ? LIMIT 1` |
-| **Application (Proposed)** | **Update (Full)**| `updateApplication(id, data)` | `PUT /applications/:id`<br>`PUT /api/applications/:id` | `UPDATE applications SET job_posting_id = ?, user_id = ?, applicant_name = ?, applicant_email = ?, resume_url = ?, cover_letter = ?, status = ? WHERE id = ?` |
-| **Application (Proposed)** | **Update (Part)**| `patchApplication(id, part)` | `PATCH /applications/:id`<br>`PATCH /api/applications/:id` | `UPDATE applications SET job_posting_id = ?, ... WHERE id = ?` *(retains untouched fields)* |
-| **Application (Proposed)** | **Delete** | `deleteApplication(id)` | `DELETE /applications/:id`<br>`DELETE /api/applications/:id` | `DELETE FROM applications WHERE id = ?` |
+| **Application** | **Create** | `createApplication(data)` | `POST /applications`<br>`POST /api/applications`<br>`POST /api/job-postings/:jobId/applications` | `INSERT INTO applications (job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status) VALUES (?, ?, ?, ?, ?, ?, ?)` |
+| **Application** | **Read (All)** | `getAllApplications()` | `GET /applications`<br>`GET /api/applications` | `SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications ORDER BY id ASC` |
+| **Application** | **Read (By Job)** | `getApplicationsByJobPostingId(jobId)` | `GET /job-postings/:jobId/applications`<br>`GET /api/job-postings/:jobId/applications` | `SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications WHERE job_posting_id = ? ORDER BY id ASC` |
+| **Application** | **Read (One)** | `getApplicationById(id)` | `GET /applications/:id`<br>`GET /api/applications/:id` | `SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications WHERE id = ? LIMIT 1` |
+| **Application** | **Update (Full)**| `updateApplication(id, data)` | `PUT /applications/:id`<br>`PUT /api/applications/:id` | `UPDATE applications SET job_posting_id = ?, user_id = ?, applicant_name = ?, applicant_email = ?, resume_url = ?, cover_letter = ?, status = ? WHERE id = ?` |
+| **Application** | **Update (Part)**| `patchApplication(id, part)` | `PATCH /applications/:id`<br>`PATCH /api/applications/:id` | `UPDATE applications SET job_posting_id = ?, ... WHERE id = ?` *(retains untouched fields)* |
+| **Application** | **Delete** | `deleteApplication(id)` | `DELETE /applications/:id`<br>`DELETE /api/applications/:id` | `DELETE FROM applications WHERE id = ?` |
 
 ---
 
@@ -341,7 +338,7 @@ All data operations are asynchronous (`async/await`) and execute parameterized S
   * `001_create_users_table.sql` & `.js`: Creates `users` table.
   * `002_create_announcements_table.sql` & `.js`: Creates `announcements` table.
   * `003_create_job_postings_table.sql` & `.js`: Creates `job_postings` table.
-  * `004_create_applications_table.sql` & `.js` (Proposed for Task 5): Will create `applications` table.
+  * `004_create_applications_table.sql` & `.js`: Creates `applications` table.
 * Commands:
   * `npm run migrate`: Applies all pending migrations in alphabetical order within a new batch.
   * `npm run migrate:status`: Displays executed vs. pending migrations table.

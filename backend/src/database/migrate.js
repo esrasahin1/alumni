@@ -200,7 +200,7 @@ async function verifyTables(connection, verbose = true) {
   console.log('\n📋 Database Table Verification:');
   console.log(`Current tables in database: [ ${tableNames.join(', ')} ]`);
 
-  const requiredTables = ['users', 'announcements'];
+  const requiredTables = ['users', 'announcements', 'job_postings', 'applications'];
   for (const table of requiredTables) {
     if (tableNames.includes(table)) {
       console.log(`  ✅ Table '${table}' exists.`);
