@@ -74,7 +74,7 @@ npm install
 
 #### 3. Örnek Verileri Yükleyin (Database Seeding)
 
-Veritabanına test ve geliştirme amaçlı örnek kayıtları (`users`, `announcements`) güvenli ve tekrarlanabilir (idempotent) şekilde eklemek için:
+Veritabanına test ve geliştirme amaçlı örnek kayıtları (`users`, `announcements`, `job_postings`) güvenli ve tekrarlanabilir (idempotent) şekilde eklemek için:
 
 ```bash
 cd backend
@@ -82,7 +82,7 @@ npm run seed
 # veya alternatif olarak:
 npm run db:seed
 ```
-*(Tekrar çalıştırıldığında mevcut kayıtlar atlanır, yinelenen veri oluşmaz).*
+*(Seeder sistemi `userSeeder.js`, `announcementSeeder.js` ve `jobPostingSeeder.js` modüllerini çalıştırır. Tekrar çalıştırıldığında mevcut kayıtlar atlanır, yinelenen veri oluşmaz).*
 
 #### 4. Sunucuyu Başlatın
 
@@ -118,7 +118,9 @@ Sunucu ayağa kalktıktan sonra aşağıdaki web arayüzlerine tarayıcınızdan
 | :--- | :--- | :--- |
 | **Ana Portal Dashboard** | [http://localhost:3000/](http://localhost:3000/) | Kullanıcılar, Duyurular, İş İlanları, Başvurular ve Swagger dokümantasyonuna hızlı erişim sağlayan merkezi dashboard. |
 | **Kullanıcı Yönetimi** | [http://localhost:3000/users](http://localhost:3000/users) | Tüm mezun ve öğrencileri listeleme, yeni kullanıcı oluşturma, detay görüntüleme, güncelleme ve silme. |
+| **Kullanıcı Detay Sayfası** | [http://localhost:3000/users/:id](http://localhost:3000/users/1) | ID'si verilen kullanıcının profil detaylarını görüntüleme, güncelleme ve silme arayüzü. |
 | **Duyuru Yönetimi** | [http://localhost:3000/announcements](http://localhost:3000/announcements) | Duyuru listesi, yeni duyuru yayınlama, detay inceleme, düzenleme ve silme. |
+| **Duyuru Detay Sayfası** | [http://localhost:3000/announcements/:id](http://localhost:3000/announcements/1) | Seçilen duyurunun başlık, içerik ve yayın tarihi detaylarını görüntüleme, düzenleme ve silme arayüzü. |
 | **İş İlanları (Job Postings)** | [http://localhost:3000/job-postings](http://localhost:3000/job-postings) | Aktif iş ve staj ilanlarını listeleme, yeni ilan yayınlama, düzenleme ve silme. Tablo üzerinden doğrudan ilanın başvurularına erişim. |
 | **İş İlanı Detay Sayfası** | [http://localhost:3000/job-postings/:id](http://localhost:3000/job-postings/1) | Seçilen iş ilanının tam açıklaması, iletişim bilgileri, **ilana ait başvuruları görüntüleme butonu**, **doğrudan bu ilana başvur butonu** ve ilanı silme aksiyonu. |
 | **İlana Özel Başvurular (Nested)** | [http://localhost:3000/job-postings/:jobPostingId/applications](http://localhost:3000/job-postings/1/applications) | Belirli bir iş ilanına gelen başvuruların filtrelenmiş listesi ve sayfa altında o ilana ait otomatik doldurulan **hızlı başvuru formu (`#apply`)**. |
@@ -134,7 +136,9 @@ Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki ta
 
 | HTTP Metodu | Endpoint | Açıklama | Başarılı Durum | Hata Durumu |
 | :--- | :--- | :--- | :--- | :--- |
-| **`GET`** | `/api/health` | Sunucu sağlık ve aktiflik kontrolünü yapar | `200 OK` | - |
+| **`GET`** | `/api/health` | Sunucu sağlık ve aktiflik kontrolünü yapar (JSON: `{ status: "ok" }`) | `200 OK` | - |
+| **`GET`** | `/health` | Alternatif sunucu sağlık kontrolü endpoint'i | `200 OK` | - |
+| **`GET`** | `/alumni` | Mezunlar ana durum bilgisi cevabı | `200 OK` | - |
 | **`GET`** | `/users` | Kullanıcı listesi ve yönetim arayüzü (HTML View) | `200 OK` | - |
 | **`POST`** | `/users` | Yeni bir kullanıcı ekler (HTML View) | `201 Created` | `409 Conflict` |
 | **`GET`** | `/users/:id` | ID'si verilen kullanıcının detay sayfasını sunar (HTML View) | `200 OK` | `404 Not Found` |
@@ -226,9 +230,9 @@ alumni/
 │   │   ├── config/           # Veritabanı bağlantı havuzu (db.js)
 │   │   ├── controllers/      # İstek kontrolcüleri ve iş mantığı
 │   │   ├── database/         # Migrasyonlar, tohumlayıcılar (seeders) ve factory'ler
-│   │   │   ├── factories/    # Mock veri üreticileri (userFactory, announcementFactory)
-│   │   │   ├── migrations/   # SQL/JS şema göç dosyaları (users, announcements)
-│   │   │   ├── seeds/        # Tekrarlanabilir örnek veri tohumlayıcıları
+│   │   │   ├── factories/    # Mock veri üreticileri (userFactory, announcementFactory, jobPostingFactory)
+│   │   │   ├── migrations/   # SQL/JS şema göç dosyaları (users, announcements, job_postings, applications)
+│   │   │   ├── seeds/        # Tekrarlanabilir örnek veri tohumlayıcıları (users, announcements, job_postings)
 │   │   │   ├── migrate.js    # Migrasyon CLI çalıştırıcısı
 │   │   │   └── seed.js       # Seed CLI çalıştırıcısı
 │   │   ├── models/           # MySQL 8.0 veri modelleri ve asenkron CRUD sorguları
@@ -250,7 +254,7 @@ alumni/
 
 This section documents the architectural structure of the **Alumni Tracking System** project for the course assignment (*"Document MVC architecture of your app and write it in README. Directories, folders, files"*).
 
-The project implements a decoupled, modular **MVC (Model-View-Controller)** architecture for its User management and Alumni tracking features. The responsibilities are clearly separated across dedicated directories under `backend/src/`.
+The project implements a decoupled, modular **MVC (Model-View-Controller)** architecture across four core domain models: **User Management**, **Announcements**, **Job Postings**, and **Applications**. The responsibilities are clearly separated across dedicated directories under `backend/src/`.
 
 ---
 
@@ -323,7 +327,7 @@ backend/src/
 
 ---
 
-### 2. Model Layer (`models/userModel.js`, `models/announcementModel.js`)
+### 2. Model Layer (`models/userModel.js`, `models/announcementModel.js`, `models/jobPostingModel.js`, `models/applicationModel.js`)
 
 > 💡 **Data Design Documentation:** For exhaustive entity schemas, field specifications, constraints, and relational designs, refer to [`ddd.md`](ddd.md).
 
@@ -368,6 +372,55 @@ backend/src/
   * **`patchAnnouncement(id, partialData)`**: Dynamically updates only the specified fields (`title` and/or `content`), preserving untouched fields.
   * **`deleteAnnouncement(id)`**: Removes the announcement record (`DELETE FROM announcements WHERE id = ?`) and returns a boolean success status (`true`/`false`).
 
+#### Job Posting Model (`models/jobPostingModel.js`):
+* **MySQL Database Persistence:**
+  Job posting data is persistently stored in the `job_postings` table of the MySQL 8.0 relational database (`alumni_db`) using the connection pool via `mysql2/promise` (`backend/src/config/db.js`).
+* **Table Schema & Attributes:**
+  * `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
+  * `title`: `VARCHAR(255) NOT NULL`
+  * `company`: `VARCHAR(255) NOT NULL`
+  * `location`: `VARCHAR(255) NULL`
+  * `description`: `TEXT NOT NULL`
+  * `contact_email`: `VARCHAR(255) NULL`
+  * `created_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
+  * `updated_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`
+* **Normalization & Safe Parameterization:**
+  Provides `formatJobPosting(row)` to normalize row structures into consistent formats (including `createdAt` and `createdDate` ISO strings). All SQL queries strictly use parameterized placeholders (`?`). Invalid, non-numeric, or missing IDs return `null` or `false` without runtime exceptions.
+* **Provided Async CRUD Functions:**
+  * **`getAllJobPostings()`**: Queries `SELECT id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings ORDER BY id ASC` and returns all normalized job posting objects.
+  * **`getJobPostingById(id)`**: Queries `SELECT ... FROM job_postings WHERE id = ? LIMIT 1` and returns the matching job posting or `null`.
+  * **`createJobPosting(jobPostingData)`**: Inserts a new job posting (`INSERT INTO job_postings (title, company, location, description, contact_email) VALUES (?, ?, ?, ?, ?)`) and returns the newly created record with generated ID and timestamps.
+  * **`updateJobPosting(id, jobPostingData, isPartial = false)`**: Replaces all fields (`UPDATE job_postings SET title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?`), returning the updated record or `null`.
+  * **`patchJobPosting(id, partialData)`**: Calls `updateJobPosting(id, partialData, true)` to partially update only the provided fields, keeping existing fields intact.
+  * **`deleteJobPosting(id)`**: Removes the job posting record (`DELETE FROM job_postings WHERE id = ?`) and returns a boolean success flag (`true`/`false`).
+
+#### Application Model (`models/applicationModel.js`):
+* **MySQL Database Persistence & Relational Design:**
+  Application data is stored persistently in the `applications` table of MySQL 8.0 (`alumni_db`). It implements relational links with parent entities:
+  * Foreign key `job_posting_id` referencing `job_postings(id)` with `ON DELETE CASCADE`.
+  * Optional foreign key `user_id` referencing `users(id)` with `ON DELETE SET NULL`.
+* **Table Schema & Attributes:**
+  * `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
+  * `job_posting_id`: `INT UNSIGNED NOT NULL` (Foreign key to `job_postings.id`)
+  * `user_id`: `INT UNSIGNED NULL` (Optional foreign key to `users.id`)
+  * `applicant_name`: `VARCHAR(255) NOT NULL`
+  * `applicant_email`: `VARCHAR(255) NOT NULL`
+  * `resume_url`: `VARCHAR(500) NULL`
+  * `cover_letter`: `TEXT NULL`
+  * `status`: `VARCHAR(50) NOT NULL DEFAULT 'PENDING'` (Supports standard statuses: `PENDING`, `REVIEWING`, `ACCEPTED`, `REJECTED`)
+  * `created_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
+  * `updated_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`
+* **Normalization & Dual Naming Support:**
+  `formatApplication(row)` returns normalized records with support for both snake_case and camelCase field access (e.g., `job_posting_id` and `jobPostingId`, `applicant_name` and `applicantName`, `resume_url` and `resumeUrl`). All database queries use parameterized placeholders (`?`).
+* **Provided Async CRUD Functions:**
+  * **`getAllApplications()`**: Queries `SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications ORDER BY id ASC` and returns all application records.
+  * **`getApplicationById(id)`**: Queries `SELECT ... FROM applications WHERE id = ? LIMIT 1` and returns the matching application or `null`.
+  * **`getApplicationsByJobPostingId(jobPostingId)`**: Queries `SELECT ... FROM applications WHERE job_posting_id = ? ORDER BY id ASC` to retrieve all applications submitted for a specific job posting.
+  * **`createApplication(applicationData)`**: Inserts a new application record (`INSERT INTO applications (...) VALUES (?, ?, ?, ?, ?, ?, ?)`), automatically defaulting `status` to `'PENDING'` if not specified, and returns the created application.
+  * **`updateApplication(id, applicationData, isPartial = false)`**: Replaces application fields via `UPDATE applications SET ... WHERE id = ?`.
+  * **`patchApplication(id, partialData)`**: Executes partial updates (particularly useful for changing the application `status` to `REVIEWING`, `ACCEPTED`, or `REJECTED`).
+  * **`deleteApplication(id)`**: Deletes the application record (`DELETE FROM applications WHERE id = ?`) and returns a boolean success status (`true`/`false`).
+
 ---
 
 ### 3. Controller Layer (`controllers/`)
@@ -392,6 +445,24 @@ The controller layer encapsulates application workflows and orchestrates communi
 * **`apiAnnouncementController.js`:**
   * Handles requests sent to the **`/api/announcements`** route for REST API clients.
   * Implements all CRUD controller functions: `getAnnouncements`, `getAnnouncement`, `createAnnouncement`, `updateAnnouncement`, `patchAnnouncement`, and `deleteAnnouncement`.
+  * Returns standard JSON responses with appropriate HTTP status codes (`200 OK`, `201 Created`, `204 No Content`, `400 Bad Request`, `404 Not Found`).
+* **`jobPostingController.js`:**
+  * Handles requests sent to the **`/job-postings`** route for browser clients.
+  * Implements all CRUD controller functions: `getJobPostings`, `getJobPosting`, `createJobPosting`, `updateJobPosting`, `patchJobPosting`, and `deleteJobPosting`.
+  * Integrates with [jobPostingView.js](file:///c:/Users/akema/Desktop/alumni/backend/src/views/jobPostingView.js) to render dynamic HTML pages, supporting JSON fallback when requested.
+  * Validates IDs and returns HTTP `400` for invalid/missing IDs or `404` for not-found records.
+* **`apiJobPostingController.js`:**
+  * Handles requests sent to the **`/api/job-postings`** route for REST API clients.
+  * Implements all CRUD controller functions: `getJobPostings`, `getJobPosting`, `createJobPosting`, `updateJobPosting`, `patchJobPosting`, and `deleteJobPosting`.
+  * Returns standard JSON responses with appropriate HTTP status codes (`200 OK`, `201 Created`, `204 No Content`, `400 Bad Request`, `404 Not Found`).
+* **`applicationController.js`:**
+  * Handles requests sent to **`/applications`** and nested **`/job-postings/:jobPostingId/applications`** routes for browser clients.
+  * Implements CRUD and nested controller functions: `getApplications`, `getApplication`, `createApplication`, `updateApplication`, `patchApplication`, `deleteApplication`, `getApplicationsByJobPosting`, and `createApplicationForJobPosting`.
+  * Integrates with [applicationView.js](file:///c:/Users/akema/Desktop/alumni/backend/src/views/applicationView.js) to render global application lists, nested job application views with parent job header context, and dedicated detail pages with in-place status modification (`PATCH /applications/:id`).
+  * Validates ID parameters and guarantees consistency between route parameters (`:jobPostingId`) and payload data.
+* **`apiApplicationController.js`:**
+  * Handles requests sent to **`/api/applications`** and nested **`/api/job-postings/:jobPostingId/applications`** routes for REST API clients.
+  * Implements CRUD and nested controller functions: `getApplications`, `getApplication`, `createApplication`, `updateApplication`, `patchApplication`, `deleteApplication`, `getApplicationsByJobPosting`, and `createApplicationForJobPosting`.
   * Returns standard JSON responses with appropriate HTTP status codes (`200 OK`, `201 Created`, `204 No Content`, `400 Bad Request`, `404 Not Found`).
 
 ---
@@ -430,6 +501,39 @@ The route layer maps incoming HTTP methods and URL paths to their corresponding 
   * `router.put('/:id', apiAnnouncementController.updateAnnouncement)`
   * `router.patch('/:id', apiAnnouncementController.patchAnnouncement)`
   * `router.delete('/:id', apiAnnouncementController.deleteAnnouncement)`
+* **`jobPostingRoutes.js` (mounted at `/job-postings`):**
+  * `router.get('/', jobPostingController.getJobPostings)`
+  * `router.post('/', jobPostingController.createJobPosting)`
+  * `router.get('/:id', jobPostingController.getJobPosting)`
+  * `router.put('/:id', jobPostingController.updateJobPosting)`
+  * `router.patch('/:id', jobPostingController.patchJobPosting)`
+  * `router.delete('/:id', jobPostingController.deleteJobPosting)`
+* **`apiJobPostingRoutes.js` (mounted at `/api/job-postings`):**
+  * `router.get('/', apiJobPostingController.getJobPostings)`
+  * `router.post('/', apiJobPostingController.createJobPosting)`
+  * `router.get('/:id', apiJobPostingController.getJobPosting)`
+  * `router.put('/:id', apiJobPostingController.updateJobPosting)`
+  * `router.patch('/:id', apiJobPostingController.patchJobPosting)`
+  * `router.delete('/:id', apiJobPostingController.deleteJobPosting)`
+* **`applicationRoutes.js` (mounted at `/applications`, uses `{ mergeParams: true }`):**
+  * `router.get('/', applicationController.getApplications)`
+  * `router.post('/', applicationController.createApplication)`
+  * `router.get('/:id', applicationController.getApplication)`
+  * `router.put('/:id', applicationController.updateApplication)`
+  * `router.patch('/:id', applicationController.patchApplication)`
+  * `router.delete('/:id', applicationController.deleteApplication)`
+* **`apiApplicationRoutes.js` (mounted at `/api/applications`, uses `{ mergeParams: true }`):**
+  * `router.get('/', apiApplicationController.getApplications)`
+  * `router.post('/', apiApplicationController.createApplication)`
+  * `router.get('/:id', apiApplicationController.getApplication)`
+  * `router.put('/:id', apiApplicationController.updateApplication)`
+  * `router.patch('/:id', apiApplicationController.patchApplication)`
+  * `router.delete('/:id', apiApplicationController.deleteApplication)`
+* **Nested Route Bindings in `app.js`:**
+  * `app.get('/job-postings/:jobPostingId/applications', applicationController.getApplicationsByJobPosting)`
+  * `app.post('/job-postings/:jobPostingId/applications', applicationController.createApplicationForJobPosting)`
+  * `app.get('/api/job-postings/:jobPostingId/applications', apiApplicationController.getApplicationsByJobPosting)`
+  * `app.post('/api/job-postings/:jobPostingId/applications', apiApplicationController.createApplicationForJobPosting)`
 
 Each router file cleanly delegates execution directly to its respective controller.
 
@@ -458,6 +562,27 @@ The presentation layer is implemented through modular view rendering files using
     * **Read (Details)**: Dedicated announcement detail page (`GET /announcements/:id`).
     * **Update (Edit)**: In-page editing functionality and standalone edit support (`PUT /announcements/:id`).
     * **Delete**: Delete button triggering confirmed deletion requests (`DELETE /announcements/:id`).
+  * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
+* **`jobPostingView.js`:**
+  * Generates the complete HTML interface for the `/job-postings` and `/job-postings/:id` endpoints.
+  * Powers the interactive **Job Posting Management** screen with full CRUD support:
+    * **Create**: "Yeni İş İlanı Yayınla" form with Title, Company, Location, Description, and Contact Email inputs (`POST /job-postings`).
+    * **Read (List)**: Structured table with `ID`, `Başlık & Şirket`, `Konum`, `Açıklama`, `İletişim`, `Oluşturulma`, and `İşlemler` columns.
+    * **Read (Details)**: Dedicated detail page (`GET /job-postings/:id`) presenting full position info, timestamps, and prominent action buttons:
+      * **📋 Bu İlanın Başvurularını Gör**: Direct link to the nested applications page (`/job-postings/:id/applications`).
+      * **✍️ Bu İlana Başvur**: Direct link jumping straight to the application form (`/job-postings/:id/applications#apply`).
+    * **Update (Edit)**: In-page editing functionality (`editJob(job)`) that populates the form, shifts to "İş İlanını Düzenle (#id)", and dispatches `PUT /job-postings/:id` requests.
+    * **Delete**: Delete button triggering confirmed `DELETE /job-postings/:id` requests to remove the job posting.
+  * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
+* **`applicationView.js`:**
+  * Generates the complete HTML interface for the `/applications`, `/applications/:id`, and nested `/job-postings/:jobPostingId/applications` endpoints.
+  * Powers the interactive **Application Management** screen:
+    * **Read (Global List)**: Comprehensive table of all applications across all jobs with `ID`, `İlan`, `Başvuran`, `E-posta`, `Durum`, `Başvuru Tarihi`, and `İşlemler` columns. Status badges are color-coded (`PENDING`, `REVIEWING`, `ACCEPTED`, `REJECTED`).
+    * **Read (Nested List)**: Filtered view for a specific job posting (`/job-postings/:jobPostingId/applications`) featuring parent job summary banner, "← Tüm Başvurulara Dön" link, and job detail navigation.
+    * **Create**: Application submission form (anchored at `#apply`). In nested views, the `job_posting_id` is automatically locked/pre-filled for the current job posting; in global view, it accepts job posting ID input along with applicant name, email, user ID (optional), resume URL, and cover letter (`POST /applications` or `POST /job-postings/:jobPostingId/applications`).
+    * **Read (Details)**: Dedicated detail page (`GET /applications/:id`) displaying candidate profile, cover letter, resume link, linked job summary, and direct link to job posting.
+    * **Status Update (Edit)**: Interactive status change dropdown allowing administrators to select a new status and dispatch `PATCH /applications/:id` with `{"status": newStatus}` and `Content-Type: application/json`.
+    * **Delete**: Delete button triggering confirmed `DELETE /applications/:id` requests.
   * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
 
 ---
@@ -556,15 +681,106 @@ apiAnnouncementController.js (Request Parsing & Validation)
 
 ---
 
+#### E. Job Posting Web View Flow (`/job-postings`)
+```text
+Client Request (Browser)
+       │
+       ▼
+   app.js (Route Mounting & Middleware)
+       │
+       ▼
+jobPostingRoutes.js (Endpoint Matching: GET, POST, PUT, DELETE)
+       │
+       ▼
+jobPostingController.js (Request Parsing & Business Logic)
+       │
+       ▼
+  jobPostingModel.js (MySQL Database via db.js Pool)
+       │
+       ▼
+  jobPostingView.js (HTML Template Rendering & XSS Escaping)
+       │
+       ▼
+ HTML Response (Rendered Page in Browser)
+```
+
+#### F. Job Posting REST API Flow (`/api/job-postings`)
+```text
+Client Request (API Client / Swagger)
+       │
+       ▼
+   app.js (Route Mounting & Middleware)
+       │
+       ▼
+apiJobPostingRoutes.js (Endpoint Matching: GET, POST, PUT, DELETE)
+       │
+       ▼
+apiJobPostingController.js (Request Parsing & Validation)
+       │
+       ▼
+  jobPostingModel.js (MySQL Database via db.js Pool)
+       │
+       ▼
+ JSON Response ({ id: 1, title: "...", company: "...", ... })
+```
+
+---
+
+#### G. Application Web View Flow (`/applications` and `/job-postings/:jobPostingId/applications`)
+```text
+Client Request (Browser)
+       │
+       ▼
+   app.js (Route Mounting, Nested Route Matching & Middleware)
+       │
+       ▼
+applicationRoutes.js / app.js Nested Handlers (GET, POST, PATCH, DELETE)
+       │
+       ▼
+applicationController.js (ID/Payload Validation & Business Logic)
+       │
+       ▼
+ applicationModel.js (MySQL Database via db.js Pool)
+       │
+       ▼
+ applicationView.js (HTML Template Rendering & XSS Escaping)
+       │
+       ▼
+ HTML Response (Rendered Page in Browser with Form & Status Badges)
+```
+
+#### H. Application REST API Flow (`/api/applications` and `/api/job-postings/:jobPostingId/applications`)
+```text
+Client Request (API Client / Swagger)
+       │
+       ▼
+   app.js (Route Mounting & Middleware)
+       │
+       ▼
+apiApplicationRoutes.js / app.js Nested API Handlers (GET, POST, PATCH, DELETE)
+       │
+       ▼
+apiApplicationController.js (Request Parsing, Status Check & Validation)
+       │
+       ▼
+ applicationModel.js (MySQL Database via db.js Pool)
+       │
+       ▼
+ JSON Response ({ id: 1, job_posting_id: 1, applicant_name: "...", status: "PENDING", ... })
+```
+
+---
+
 ### 7. Current Architecture Assessment
 
-* **Modular MVC Structure:** The application fully follows a modular, decoupled MVC architecture for both User and Announcement operations. Model, View, Controller, and Route responsibilities are cleanly isolated into dedicated files and directories.
-* **Separation of Concerns in `app.js`:** User and Announcement CRUD and data management logic no longer reside inside `app.js`. `app.js` serves strictly as the application entry point responsible for:
+* **Modular MVC Structure:** The application fully follows a modular, decoupled MVC architecture across all four domains: Users, Announcements, Job Postings, and Applications. Model, View, Controller, and Route responsibilities are cleanly isolated into dedicated files and directories.
+* **Separation of Concerns in `app.js`:** CRUD and data management logic no longer reside inside `app.js`. `app.js` serves strictly as the application entry point responsible for:
   * Initializing the Express instance.
   * Registering global middleware (`cors`, `express.json`, `express.urlencoded`).
-  * Mounting route modules (`app.use('/users', userRoutes)`, `app.use('/api/users', apiUserRoutes)`, `app.use('/announcements', announcementRoutes)`, `app.use('/api/announcements', apiAnnouncementRoutes)`, `app.use('/alumni', alumniRoutes)`).
+  * Mounting direct route modules (`app.use('/users', userRoutes)`, `app.use('/api/users', apiUserRoutes)`, `app.use('/announcements', announcementRoutes)`, `app.use('/api/announcements', apiAnnouncementRoutes)`, `app.use('/job-postings', jobPostingRoutes)`, `app.use('/api/job-postings', apiJobPostingRoutes)`, `app.use('/applications', applicationRoutes)`, `app.use('/api/applications', apiApplicationRoutes)`, `app.use('/alumni', alumniRoutes)`).
+  * Registering nested routes (`/job-postings/:jobPostingId/applications` and `/api/job-postings/:jobPostingId/applications`).
   * Configuring OpenAPI 3.0 specifications and serving Swagger UI (`/api/swagger`).
   * Starting the HTTP server on the configured port.
-* **Database Persistence Achieved:** The transition from temporary in-memory arrays to persistent MySQL 8.0 relational database storage is complete. Both models query MySQL via parameterized prepared statements (`?`), all controller handlers asynchronously coordinate operations using `await`, and data persists across Docker container and server restarts via the named volume `mysql_data`.
+* **Database Persistence Achieved:** The transition from temporary in-memory arrays to persistent MySQL 8.0 relational database storage is complete for all four tables (`users`, `announcements`, `job_postings`, `applications`). All models query MySQL via parameterized prepared statements (`?`), all controller handlers asynchronously coordinate operations using `await`, and data persists across Docker container and server restarts via the named volume `mysql_data`.
 * **Containerization & Reproducibility:** The complete stack is Dockerized via `docker-compose.yml` and `backend/Dockerfile`. The backend container waits for MySQL healthiness before booting, guaranteeing robust and reproducible deployments across development and production environments.
 
