@@ -1,6 +1,7 @@
 const { createConnection } = require('../config/db');
 const { seedUsers } = require('./seeds/userSeeder');
 const { seedAnnouncements } = require('./seeds/announcementSeeder');
+const { seedJobPostings } = require('./seeds/jobPostingSeeder');
 
 /**
  * Main Database Seed Runner
@@ -20,7 +21,7 @@ async function runSeeds() {
     const tableKey = Object.keys(tables[0] || {})[0] || 'Tables_in_alumni_db';
     const existingTableNames = tables.map(t => t[tableKey]);
 
-    const requiredTables = ['users', 'announcements'];
+    const requiredTables = ['users', 'announcements', 'job_postings'];
     const missing = requiredTables.filter(t => !existingTableNames.includes(t));
 
     if (missing.length > 0) {
@@ -34,6 +35,7 @@ async function runSeeds() {
     // Execute individual seeders
     const userResult = await seedUsers(connection);
     const announcementResult = await seedAnnouncements(connection);
+    const jobPostingResult = await seedJobPostings(connection);
 
     const elapsed = Date.now() - startTime;
 
@@ -43,12 +45,14 @@ async function runSeeds() {
     console.log(`⏱️  Duration:             ${elapsed}ms`);
     console.log(`👤 Users:                ${userResult.inserted} inserted, ${userResult.skipped} skipped`);
     console.log(`📢 Announcements:        ${announcementResult.inserted} inserted, ${announcementResult.skipped} skipped`);
+    console.log(`💼 Job Postings:         ${jobPostingResult.inserted} inserted, ${jobPostingResult.skipped} skipped`);
     console.log('==================================================');
 
     // Display current table counts
     const [[{ userCount }]] = await connection.query('SELECT COUNT(*) AS userCount FROM users');
     const [[{ announcementCount }]] = await connection.query('SELECT COUNT(*) AS announcementCount FROM announcements');
-    console.log(`📊 Current Total in DB:   ${userCount} user(s), ${announcementCount} announcement(s)\n`);
+    const [[{ jobPostingCount }]] = await connection.query('SELECT COUNT(*) AS jobPostingCount FROM job_postings');
+    console.log(`📊 Current Total in DB:   ${userCount} user(s), ${announcementCount} announcement(s), ${jobPostingCount} job posting(s)\n`);
 
   } catch (error) {
     console.error('❌ Seeding error:', error.message);

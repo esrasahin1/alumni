@@ -127,6 +127,18 @@ Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki ta
 | **`PUT`** | `/api/announcements/:id` | Duyurunun tüm bilgilerini günceller (ID korunur) | `200 OK` | `400 Bad Request`, `404 Not Found` |
 | **`PATCH`** | `/api/announcements/:id` | Duyurunun alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
 | **`DELETE`** | `/api/announcements/:id` | Belirtilen ID'ye sahip duyuruyu siler | `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/job-postings` | İş ilanları listesi ve yönetim arayüzü (HTML View) | `200 OK` | - |
+| **`POST`** | `/job-postings` | Yeni bir iş ilanı ekler (HTML View) | `201 Created` | `400 Bad Request` |
+| **`GET`** | `/job-postings/:id` | ID'si verilen iş ilanının detay sayfasını sunar (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/job-postings/:id` | İş ilanının tüm bilgilerini günceller (HTML / Fetch) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/job-postings/:id` | İş ilanının alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/job-postings/:id` | Belirtilen iş ilanını sistemden siler | `200 OK` / `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/job-postings` | Sistemdeki tüm iş ilanlarını JSON listesi olarak döner | `200 OK` | - |
+| **`POST`** | `/api/job-postings` | Yeni bir iş ilanı kaydeder (JSON) | `201 Created` | `400 Bad Request` |
+| **`GET`** | `/api/job-postings/:id` | ID'si verilen iş ilanının detaylarını getirir (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/api/job-postings/:id` | İş ilanının tüm bilgilerini günceller (ID korunur) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/api/job-postings/:id` | İş ilanının alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/api/job-postings/:id` | Belirtilen ID'ye sahip iş ilanını siler | `204 No Content` | `400 Bad Request`, `404 Not Found` |
 | **`GET`** | `/api/swagger` | İnteraktif Swagger UI dokümantasyon ekranını sunar | `200 OK` | - |
 
 ---
@@ -206,15 +218,19 @@ backend/src/
 │   ├── alumniController.js
 │   ├── announcementController.js
 │   ├── apiAnnouncementController.js
+│   ├── apiJobPostingController.js
 │   ├── apiUserController.js
+│   ├── jobPostingController.js
 │   └── userController.js
 ├── database/
 │   ├── factories/
 │   │   ├── announcementFactory.js
 │   │   └── userFactory.js
+├── database/
 │   ├── migrations/
 │   │   ├── 001_create_users_table.js
-│   │   └── 002_create_announcements_table.js
+│   │   ├── 002_create_announcements_table.js
+│   │   └── 003_create_job_postings_table.js
 │   ├── seeds/
 │   │   ├── 001_seed_users.js
 │   │   └── 002_seed_announcements.js
@@ -222,16 +238,20 @@ backend/src/
 │   └── seed.js
 ├── models/
 │   ├── announcementModel.js
+│   ├── jobPostingModel.js
 │   └── userModel.js
 ├── routes/
 │   ├── alumniRoutes.js
 │   ├── announcementRoutes.js
 │   ├── apiAnnouncementRoutes.js
+│   ├── apiJobPostingRoutes.js
 │   ├── apiUserRoutes.js
+│   ├── jobPostingRoutes.js
 │   └── userRoutes.js
 ├── views/
 │   ├── announcementView.js
 │   ├── apiUserView.js
+│   ├── jobPostingView.js
 │   └── userView.js
 └── app.js
 ```

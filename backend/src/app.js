@@ -6,6 +6,12 @@ const userRoutes = require('./routes/userRoutes');
 const apiUserRoutes = require('./routes/apiUserRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
 const apiAnnouncementRoutes = require('./routes/apiAnnouncementRoutes');
+const jobPostingRoutes = require('./routes/jobPostingRoutes');
+const apiJobPostingRoutes = require('./routes/apiJobPostingRoutes');
+const applicationRoutes = require('./routes/applicationRoutes');
+const apiApplicationRoutes = require('./routes/apiApplicationRoutes');
+const applicationController = require('./controllers/applicationController');
+const apiApplicationController = require('./controllers/apiApplicationController');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,6 +78,18 @@ app.use('/users', userRoutes);
 app.use('/api/users', apiUserRoutes);
 app.use('/announcements', announcementRoutes);
 app.use('/api/announcements', apiAnnouncementRoutes);
+app.use('/job-postings', jobPostingRoutes);
+app.use('/api/job-postings', apiJobPostingRoutes);
+
+// Nested routes under Job Postings
+app.get('/job-postings/:jobPostingId/applications', applicationController.getApplicationsByJobPosting);
+app.post('/job-postings/:jobPostingId/applications', applicationController.createApplicationForJobPosting);
+app.get('/api/job-postings/:jobPostingId/applications', apiApplicationController.getApplicationsByJobPosting);
+app.post('/api/job-postings/:jobPostingId/applications', apiApplicationController.createApplicationForJobPosting);
+
+// Direct Application routes
+app.use('/applications', applicationRoutes);
+app.use('/api/applications', apiApplicationRoutes);
 app.get('/ok', (req, res) => res.status(200).send('ok'));
 
 // GET /api/health → JSON formatında { "status": "ok" } cevabı döner
@@ -773,6 +791,740 @@ const swaggerDocument = {
             content: {
               "application/json": {
                 example: { message: "Duyuru bulunamadı" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/job-postings": {
+      get: {
+        tags: ["JobPosting"],
+        summary: "Tüm iş ilanlarını listeler",
+        description: "apiJobPostingRoutes ve apiJobPostingController üzerinden mevcut tüm iş ilanlarını JSON dizisi olarak döner.",
+        responses: {
+          "200": {
+            description: "İş ilanları listesi",
+            content: {
+              "application/json": {
+                example: [
+                  {
+                    id: 1,
+                    title: "Full Stack Developer",
+                    company: "Tech Alumni Corp",
+                    location: "Istanbul / Hybrid",
+                    description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
+                    contact_email: "careers@techalumni.com",
+                    createdAt: "2026-10-21T09:40:00.000Z",
+                    createdDate: "2026-10-21T09:40:00.000Z"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      post: {
+        tags: ["JobPosting"],
+        summary: "Yeni bir iş ilanı oluşturur",
+        description: "apiJobPostingRoutes ve apiJobPostingController üzerinden yeni bir iş ilanı ekler ve oluşturulan ilanı döner.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", example: "Full Stack Developer" },
+                  company: { type: "string", example: "Tech Alumni Corp" },
+                  location: { type: "string", example: "Istanbul / Hybrid" },
+                  description: { type: "string", example: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks." },
+                  contact_email: { type: "string", example: "careers@techalumni.com" }
+                },
+                required: ["title", "company", "description"]
+              }
+            }
+          }
+        },
+        responses: {
+          "201": {
+            description: "İş ilanı başarıyla oluşturuldu",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  title: "Full Stack Developer",
+                  company: "Tech Alumni Corp",
+                  location: "Istanbul / Hybrid",
+                  description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
+                  contact_email: "careers@techalumni.com",
+                  createdAt: "2026-10-21T09:40:00.000Z",
+                  createdDate: "2026-10-21T09:40:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Eksik veya geçersiz alanlar",
+            content: {
+              "application/json": {
+                example: { message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur." }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/job-postings/{id}": {
+      get: {
+        tags: ["JobPosting"],
+        summary: "ID'ye göre iş ilanı getirir",
+        description: "Belirtilen ID'ye sahip tek bir iş ilanını döner.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Getirilmek istenen iş ilanının ID'si"
+          }
+        ],
+        responses: {
+          "200": {
+            description: "İş ilanı bulundu",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  title: "Full Stack Developer",
+                  company: "Tech Alumni Corp",
+                  location: "Istanbul / Hybrid",
+                  description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
+                  contact_email: "careers@techalumni.com",
+                  createdAt: "2026-10-21T09:40:00.000Z",
+                  createdDate: "2026-10-21T09:40:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik iş ilanı ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik iş ilanı ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "İş ilanı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "İş ilanı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      put: {
+        tags: ["JobPosting"],
+        summary: "İş ilanı bilgilerini tamamen günceller",
+        description: "Mevcut iş ilanının tüm bilgilerini değiştirir (ID korunur).",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Güncellenecek iş ilanının ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", example: "Senior Backend Developer" },
+                  company: { type: "string", example: "Tech Alumni Corp" },
+                  location: { type: "string", example: "Remote" },
+                  description: { type: "string", example: "Looking for a Senior Backend Developer with Node.js/MySQL experience." },
+                  contact_email: { type: "string", example: "careers@techalumni.com" }
+                },
+                required: ["title", "company", "description"]
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "İş ilanı başarıyla güncellendi",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  title: "Senior Backend Developer",
+                  company: "Tech Alumni Corp",
+                  location: "Remote",
+                  description: "Looking for a Senior Backend Developer with Node.js/MySQL experience.",
+                  contact_email: "careers@techalumni.com",
+                  createdAt: "2026-10-21T09:40:00.000Z",
+                  createdDate: "2026-10-21T09:40:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik iş ilanı ID'si veya eksik alanlar",
+            content: {
+              "application/json": {
+                example: { message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur." }
+              }
+            }
+          },
+          "404": {
+            description: "İş ilanı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "İş ilanı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      patch: {
+        tags: ["JobPosting"],
+        summary: "İş ilanının belirtilen alanlarını kısmi olarak günceller",
+        description: "Yalnızca gönderilen alanlar güncellenir, diğer alanlar ve ID korunur.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Kısmi güncellenecek iş ilanının ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", example: "Lead Backend Developer" },
+                  company: { type: "string", example: "Tech Alumni Corp" },
+                  location: { type: "string", example: "Ankara / Remote" },
+                  description: { type: "string", example: "Updated description..." },
+                  contact_email: { type: "string", example: "jobs@techalumni.com" }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "İş ilanı kısmi olarak güncellendi",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  title: "Lead Backend Developer",
+                  company: "Tech Alumni Corp",
+                  location: "Ankara / Remote",
+                  description: "Updated description...",
+                  contact_email: "jobs@techalumni.com",
+                  createdAt: "2026-10-21T09:40:00.000Z",
+                  createdDate: "2026-10-21T09:40:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik iş ilanı ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik iş ilanı ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "İş ilanı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "İş ilanı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      delete: {
+        tags: ["JobPosting"],
+        summary: "İş ilanını siler",
+        description: "Belirtilen ID'ye sahip iş ilanını sistemden siler.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Silinecek iş ilanının ID'si"
+          }
+        ],
+        responses: {
+          "204": { description: "İş ilanı başarıyla silindi (İçerik yok)" },
+          "400": {
+            description: "Geçersiz veya eksik iş ilanı ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik iş ilanı ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "İş ilanı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "İş ilanı bulunamadı" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/job-postings/{jobPostingId}/applications": {
+      get: {
+        tags: ["ApiApplication", "JobPosting"],
+        summary: "Belirli bir iş ilanına ait başvuruları listeler",
+        description: "jobPostingId parametresine karşılık gelen iş ilanına yapılmış tüm başvuruları döner.",
+        parameters: [
+          {
+            name: "jobPostingId",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Hedef iş ilanının ID'si"
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Başvuru listesi",
+            content: {
+              "application/json": {
+                example: [
+                  {
+                    id: 1,
+                    job_posting_id: 1,
+                    user_id: null,
+                    applicant_name: "Canan Yılmaz",
+                    applicant_email: "canan.yilmaz@alumni.edu.tr",
+                    resume_url: "https://example.com/cv.pdf",
+                    cover_letter: "Pozisyona başvurmak istiyorum.",
+                    status: "PENDING",
+                    createdAt: "2026-10-21T11:25:00.000Z",
+                    createdDate: "2026-10-21T11:25:00.000Z"
+                  }
+                ]
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik iş ilanı ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik iş ilanı ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "İş ilanı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "İş ilanı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      post: {
+        tags: ["ApiApplication", "JobPosting"],
+        summary: "Belirli bir iş ilanı altına yeni başvuru oluşturur",
+        description: "URL'deki jobPostingId parametresini hedef alarak yeni bir başvuru kaydı oluşturur.",
+        parameters: [
+          {
+            name: "jobPostingId",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Hedef iş ilanının ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  applicant_name: { type: "string", example: "Canan Yılmaz" },
+                  applicant_email: { type: "string", example: "canan.yilmaz@alumni.edu.tr" },
+                  user_id: { type: "integer", nullable: true, example: null },
+                  resume_url: { type: "string", nullable: true, example: "https://example.com/cv.pdf" },
+                  cover_letter: { type: "string", nullable: true, example: "Pozisyona başvurmak istiyorum." },
+                  status: { type: "string", example: "PENDING" }
+                },
+                required: ["applicant_name", "applicant_email"]
+              }
+            }
+          }
+        },
+        responses: {
+          "201": {
+            description: "Başvuru başarıyla oluşturuldu",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  job_posting_id: 1,
+                  user_id: null,
+                  applicant_name: "Canan Yılmaz",
+                  applicant_email: "canan.yilmaz@alumni.edu.tr",
+                  resume_url: "https://example.com/cv.pdf",
+                  cover_letter: "Pozisyona başvurmak istiyorum.",
+                  status: "PENDING",
+                  createdAt: "2026-10-21T11:25:00.000Z",
+                  createdDate: "2026-10-21T11:25:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Eksik alan veya çelişkili iş ilanı ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Başvuran adı (applicant_name) ve e-posta (applicant_email) alanları zorunludur." }
+              }
+            }
+          },
+          "404": {
+            description: "İş ilanı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "İş ilanı bulunamadı" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/applications": {
+      get: {
+        tags: ["ApiApplication"],
+        summary: "Tüm başvuruları listeler (ApiApplication)",
+        description: "Sistemde kayıtlı tüm iş başvurularını dizi olarak döner.",
+        responses: {
+          "200": {
+            description: "Başvuru listesi",
+            content: {
+              "application/json": {
+                example: [
+                  {
+                    id: 1,
+                    job_posting_id: 1,
+                    user_id: null,
+                    applicant_name: "Canan Yılmaz",
+                    applicant_email: "canan.yilmaz@alumni.edu.tr",
+                    resume_url: "https://example.com/cv.pdf",
+                    cover_letter: "Pozisyona başvurmak istiyorum.",
+                    status: "PENDING",
+                    createdAt: "2026-10-21T11:25:00.000Z",
+                    createdDate: "2026-10-21T11:25:00.000Z"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      post: {
+        tags: ["ApiApplication"],
+        summary: "Yeni başvuru oluşturur (ApiApplication)",
+        description: "Doğrudan iş ilanı ID'si belirterek yeni bir başvuru kaydı ekler.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  job_posting_id: { type: "integer", example: 1 },
+                  applicant_name: { type: "string", example: "Canan Yılmaz" },
+                  applicant_email: { type: "string", example: "canan.yilmaz@alumni.edu.tr" },
+                  user_id: { type: "integer", nullable: true, example: null },
+                  resume_url: { type: "string", nullable: true, example: "https://example.com/cv.pdf" },
+                  cover_letter: { type: "string", nullable: true, example: "Pozisyona başvurmak istiyorum." },
+                  status: { type: "string", example: "PENDING" }
+                },
+                required: ["job_posting_id", "applicant_name", "applicant_email"]
+              }
+            }
+          }
+        },
+        responses: {
+          "201": {
+            description: "Başvuru başarıyla oluşturuldu",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  job_posting_id: 1,
+                  user_id: null,
+                  applicant_name: "Canan Yılmaz",
+                  applicant_email: "canan.yilmaz@alumni.edu.tr",
+                  resume_url: "https://example.com/cv.pdf",
+                  cover_letter: "Pozisyona başvurmak istiyorum.",
+                  status: "PENDING",
+                  createdAt: "2026-10-21T11:25:00.000Z",
+                  createdDate: "2026-10-21T11:25:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Eksik veya geçersiz alanlar",
+            content: {
+              "application/json": {
+                example: { message: "İş ilanı ID'si (job_posting_id), başvuran adı (applicant_name) ve e-posta (applicant_email) alanları zorunludur." }
+              }
+            }
+          },
+          "404": {
+            description: "Belirtilen iş ilanı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Belirtilen iş ilanı bulunamadı" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/applications/{id}": {
+      get: {
+        tags: ["ApiApplication"],
+        summary: "ID'ye göre başvuru getirir",
+        description: "Belirtilen ID'ye sahip tek bir başvuruyu döner.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Getirilmek istenen başvurunun ID'si"
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Başvuru bulundu",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  job_posting_id: 1,
+                  user_id: null,
+                  applicant_name: "Canan Yılmaz",
+                  applicant_email: "canan.yilmaz@alumni.edu.tr",
+                  resume_url: "https://example.com/cv.pdf",
+                  cover_letter: "Pozisyona başvurmak istiyorum.",
+                  status: "PENDING",
+                  createdAt: "2026-10-21T11:25:00.000Z",
+                  createdDate: "2026-10-21T11:25:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik başvuru ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik başvuru ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "Başvuru bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Başvuru bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      put: {
+        tags: ["ApiApplication"],
+        summary: "Başvuru bilgilerini tam günceller (PUT)",
+        description: "Belirtilen ID'ye sahip başvurunun tüm bilgilerini günceller.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Güncellenecek başvurunun ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  job_posting_id: { type: "integer", example: 1 },
+                  applicant_name: { type: "string", example: "Canan Yılmaz" },
+                  applicant_email: { type: "string", example: "canan.yilmaz@alumni.edu.tr" },
+                  user_id: { type: "integer", nullable: true, example: null },
+                  resume_url: { type: "string", nullable: true, example: "https://example.com/cv.pdf" },
+                  cover_letter: { type: "string", nullable: true, example: "Güncellenmiş ön yazı..." },
+                  status: { type: "string", example: "REVIEWING" }
+                },
+                required: ["job_posting_id", "applicant_name", "applicant_email"]
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Başvuru başarıyla güncellendi",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  job_posting_id: 1,
+                  user_id: null,
+                  applicant_name: "Canan Yılmaz",
+                  applicant_email: "canan.yilmaz@alumni.edu.tr",
+                  resume_url: "https://example.com/cv.pdf",
+                  cover_letter: "Güncellenmiş ön yazı...",
+                  status: "REVIEWING",
+                  createdAt: "2026-10-21T11:25:00.000Z",
+                  createdDate: "2026-10-21T11:25:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik alanlar",
+            content: {
+              "application/json": {
+                example: { message: "İş ilanı ID'si (job_posting_id), başvuran adı (applicant_name) ve e-posta (applicant_email) alanları zorunludur." }
+              }
+            }
+          },
+          "404": {
+            description: "Başvuru veya iş ilanı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Başvuru bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      patch: {
+        tags: ["ApiApplication"],
+        summary: "Başvuru bilgilerini kısmi günceller (PATCH)",
+        description: "Belirtilen ID'ye sahip başvurunun sadece gönderilen alanlarını günceller.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Kısmi güncellenecek başvurunun ID'si"
+          }
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  status: { type: "string", example: "ACCEPTED" },
+                  cover_letter: { type: "string", example: "Ek notlar..." }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Başvuru kısmi olarak güncellendi",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  job_posting_id: 1,
+                  user_id: null,
+                  applicant_name: "Canan Yılmaz",
+                  applicant_email: "canan.yilmaz@alumni.edu.tr",
+                  resume_url: "https://example.com/cv.pdf",
+                  cover_letter: "Ek notlar...",
+                  status: "ACCEPTED",
+                  createdAt: "2026-10-21T11:25:00.000Z",
+                  createdDate: "2026-10-21T11:25:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Geçersiz veya eksik başvuru ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik başvuru ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "Başvuru bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Başvuru bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      delete: {
+        tags: ["ApiApplication"],
+        summary: "Başvuruyu siler",
+        description: "Belirtilen ID'ye sahip başvuruyu sistemden siler.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "Silinecek başvurunun ID'si"
+          }
+        ],
+        responses: {
+          "204": { description: "Başvuru başarıyla silindi (İçerik yok)" },
+          "400": {
+            description: "Geçersiz veya eksik başvuru ID'si",
+            content: {
+              "application/json": {
+                example: { message: "Geçersiz veya eksik başvuru ID'si" }
+              }
+            }
+          },
+          "404": {
+            description: "Başvuru bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Başvuru bulunamadı" }
               }
             }
           }
