@@ -94,6 +94,17 @@ npm start
 
 Sunucu varsayılan olarak **`http://localhost:3000`** adresinde çalışmaya başlar.
 
+#### 5. Testleri Çalıştırın (Otomatik Test Paketi)
+
+> ℹ️ **Önemli Ön Koşul:** Test paketi (`test_nested_route.js`), çalışan backend sunucusuna doğrudan HTTP istekleri göndererek uçtan uca doğrulama yapar. Bu nedenle testleri çalıştırmadan önce backend uygulamasının (Docker konteyneri ile veya `cd backend && npm start` komutu ile `http://127.0.0.1:3000` adresinde) **çalışıyor olması gerekir**.
+
+Nested API rota özelliklerini (`GET & POST /api/users/:id/jobs`), parametre önceliklerini, hata durumlarını (400, 404) ve Swagger uyumunu doğrulamak için:
+
+```bash
+npm test
+```
+*(Bu komut `test_nested_route.js` test paketini çalıştırarak çalışan sunucu üzerinden 13 senaryoyu otomatik doğrular).*
+
 ---
 
 ## 🖥️ Kullanıcı Arayüzü (Web UI) ve Sayfa Erişimleri
@@ -119,7 +130,8 @@ Sunucu ayağa kalktıktan sonra aşağıdaki web arayüzlerine tarayıcınızdan
 | **Ana Portal Dashboard** | [http://localhost:3000/](http://localhost:3000/) | Kullanıcılar, Duyurular, İş İlanları, Başvurular ve Swagger dokümantasyonuna hızlı erişim sağlayan merkezi dashboard. |
 | **Kullanıcı Yönetimi** | [http://localhost:3000/users](http://localhost:3000/users) | Tüm mezun ve öğrencileri listeleme, yeni kullanıcı oluşturma, detay görüntüleme, güncelleme ve silme. |
 | **Kullanıcı Detay Sayfası** | [http://localhost:3000/users/:id](http://localhost:3000/users/1) | ID'si verilen kullanıcının profil detaylarını görüntüleme, güncelleme ve silme arayüzü. |
-| **Kullanıcı İlanları (Nested)** | [http://localhost:3000/api/users/:id/jobs](http://localhost:3000/api/users/1/jobs) | Belirli bir kullanıcının oluşturduğu iş ilanlarını listeler (JSON API). |
+| **Kullanıcı İlanları (Nested API)** | [http://localhost:3000/api/users/:id/jobs](http://localhost:3000/api/users/1/jobs) | Belirli bir kullanıcının oluşturduğu iş ilanlarını listeler (JSON API). |
+| **Kullanıcı İlanları (Web)** | [http://localhost:3000/users/:id/jobs](http://localhost:3000/users/1/jobs) | Belirli bir kullanıcının oluşturduğu iş ilanlarını görüntüler (Web / JSON). |
 | **Duyuru Yönetimi** | [http://localhost:3000/announcements](http://localhost:3000/announcements) | Duyuru listesi, yeni duyuru yayınlama, detay inceleme, düzenleme ve silme. |
 | **Duyuru Detay Sayfası** | [http://localhost:3000/announcements/:id](http://localhost:3000/announcements/1) | Seçilen duyurunun başlık, içerik ve yayın tarihi detaylarını görüntüleme, düzenleme ve silme arayüzü. |
 | **İş İlanları (Job Postings)** | [http://localhost:3000/job-postings](http://localhost:3000/job-postings) | Aktif iş ve staj ilanlarını listeleme, yeni ilan yayınlama, düzenleme ve silme. Tablo üzerinden doğrudan ilanın başvurularına erişim. |
@@ -143,6 +155,7 @@ Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki ta
 | **`GET`** | `/users` | Kullanıcı listesi ve yönetim arayüzü (HTML View) | `200 OK` | - |
 | **`POST`** | `/users` | Yeni bir kullanıcı ekler (HTML View) | `201 Created` | `409 Conflict` |
 | **`GET`** | `/users/:id` | ID'si verilen kullanıcının detay sayfasını sunar (HTML View) | `200 OK` | `404 Not Found` |
+| **`GET`** | `/users/:id/jobs` | Belirli bir kullanıcının oluşturduğu iş ilanlarını listeler (HTML / JSON) | `200 OK` | `404 Not Found` |
 | **`PUT`** | `/users/:id` | Kullanıcının tüm bilgilerini günceller (HTML / Fetch) | `200 OK` | `404 Not Found`, `409 Conflict` |
 | **`PATCH`** | `/users/:id` | Kullanıcının alanlarını kısmi olarak günceller (HTML View) | `200 OK` | `404 Not Found`, `409 Conflict` |
 | **`DELETE`** | `/users/:id` | Belirtilen kullanıcıyı sistemden siler (HTML View) | `200 OK` / `204 No Content` | `404 Not Found` |
@@ -195,6 +208,7 @@ Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki ta
 | **`GET`** | `/api/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına ait başvuruları JSON listesi olarak döner | `200 OK` | `400 Bad Request`, `404 Not Found` |
 | **`POST`** | `/api/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına JSON başvurusu oluşturur | `201 Created` | `400 Bad Request`, `404 Not Found` |
 | **`GET`** | `/api/swagger` | İnteraktif Swagger UI dokümantasyon ekranını sunar | `200 OK` | - |
+| **`GET`** | `/api/swagger/doc.json` | Ham OpenAPI 3.0 JSON dokümantasyonunu döner | `200 OK` | - |
 
 ---
 
@@ -234,7 +248,7 @@ alumni/
 │   │   ├── controllers/      # İstek kontrolcüleri ve iş mantığı
 │   │   ├── database/         # Migrasyonlar, tohumlayıcılar (seeders) ve factory'ler
 │   │   │   ├── factories/    # Mock veri üreticileri (userFactory, announcementFactory, jobPostingFactory)
-│   │   │   ├── migrations/   # SQL/JS şema göç dosyaları (users, announcements, job_postings, applications)
+│   │   │   ├── migrations/   # SQL/JS şema göç dosyaları (users, announcements, job_postings, applications, user_id FK)
 │   │   │   ├── seeds/        # Tekrarlanabilir örnek veri tohumlayıcıları (users, announcements, job_postings)
 │   │   │   ├── migrate.js    # Migrasyon CLI çalıştırıcısı
 │   │   │   └── seed.js       # Seed CLI çalıştırıcısı
@@ -242,6 +256,7 @@ alumni/
 │   │   ├── routes/           # API ve web rota tanımlamaları
 │   │   ├── views/            # HTML arayüz ve sayfa şablonları
 │   │   └── app.js            # Express sunucusu, ara katmanlar ve Swagger konfigürasyonu
+│   ├── test_nested_route.js  # Nested API rota test paketi (GET & POST /api/users/:id/jobs)
 │   ├── .dockerignore         # Docker derleme hariç tutma kuralları
 │   ├── Dockerfile            # Backend Docker konteyner yapılandırması
 │   ├── package.json          # Proje bağımlılıkları ve script'ler
@@ -286,9 +301,15 @@ backend/src/
 │   │   └── userFactory.js
 │   ├── migrations/
 │   │   ├── 001_create_users_table.js
+│   │   ├── 001_create_users_table.sql
 │   │   ├── 002_create_announcements_table.js
+│   │   ├── 002_create_announcements_table.sql
 │   │   ├── 003_create_job_postings_table.js
-│   │   └── 004_create_applications_table.js
+│   │   ├── 003_create_job_postings_table.sql
+│   │   ├── 004_create_applications_table.js
+│   │   ├── 004_create_applications_table.sql
+│   │   ├── 005_add_user_id_to_job_postings.js
+│   │   └── 005_add_user_id_to_job_postings.sql
 │   ├── seeds/
 │   │   ├── announcementSeeder.js
 │   │   ├── jobPostingSeeder.js
@@ -394,6 +415,7 @@ backend/src/
   * **`getAllJobPostings()`**: Queries `SELECT id, user_id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings ORDER BY id ASC` and returns all normalized job posting objects.
   * **`getJobPostingById(id)`**: Queries `SELECT ... FROM job_postings WHERE id = ? LIMIT 1` and returns the matching job posting or `null`.
   * **`getJobPostingsByUserId(userId)`**: First verifies that the target user exists in `users` (`SELECT id, name, email FROM users WHERE id = ? LIMIT 1`). If the user does not exist, returns `null` (enabling 404 response). If the user exists, returns an array of job postings where `user_id = ?` (ordered by `id ASC`).
+  * **`getJobPostingsByContactEmail(email)`**: Queries `SELECT ... FROM job_postings WHERE contact_email = ? ORDER BY id ASC` and returns all matching job postings.
   * **`createJobPosting(jobPostingData)`**: Inserts a new job posting (`INSERT INTO job_postings (user_id, title, company, location, description, contact_email) VALUES (?, ?, ?, ?, ?, ?)`) and returns the newly created record with generated ID and timestamps.
   * **`updateJobPosting(id, jobPostingData, isPartial = false)`**: Replaces all fields (`UPDATE job_postings SET user_id = ?, title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?`), returning the updated record or `null`.
   * **`patchJobPosting(id, partialData)`**: Calls `updateJobPosting(id, partialData, true)` to partially update only the provided fields, keeping existing fields intact.
@@ -435,13 +457,13 @@ backend/src/
 The controller layer encapsulates application workflows and orchestrates communication between routes, models, and views:
 
 * **`userController.js`:**
-  * Handles requests sent to the **`/users`** route.
-  * Implements all CRUD controller functions: `getUsers`, `getUser`, `createUser`, `updateUser`, `patchUser`, and `deleteUser`.
+  * Handles requests sent to the **`/users`** route and nested user job route.
+  * Implements controller functions: `getUsers`, `getUser`, `getUserJobs`, `createUser`, `updateUser`, `patchUser`, and `deleteUser`.
   * Integrates with [userView.js](file:///c:/Users/akema/Desktop/alumni/backend/src/views/userView.js) to return rich HTML view responses for browser users, with fallback JSON responses when explicitly requested via `Accept: application/json`.
 * **`apiUserController.js`:**
-  * Handles requests sent to the **`/api/users`** route.
-  * Implements all CRUD controller functions: `getUsers`, `getUser`, `createUser`, `updateUser`, `patchUser`, and `deleteUser`.
-  * Primarily focused on REST API clients, returning standard JSON responses with appropriate HTTP status codes (200, 201, 204, 404), while also supporting web view dashboards via [apiUserView.js](file:///c:/Users/akema/Desktop/alumni/backend/src/views/apiUserView.js).
+  * Handles requests sent to the **`/api/users`** route and nested user job routes.
+  * Implements REST API controller functions: `getUsers`, `getUser`, `getUserJobs`, `createUserJob`, `createUser`, `updateUser`, `patchUser`, and `deleteUser`.
+  * Primarily focused on REST API clients, returning standard JSON responses with appropriate HTTP status codes (`200 OK`, `201 Created`, `204 No Content`, `400 Bad Request`, `404 Not Found`), while also supporting web view dashboards via [apiUserView.js](file:///c:/Users/akema/Desktop/alumni/backend/src/views/apiUserView.js).
 * **`alumniController.js`:**
   * Handles requests for the alumni route (`GET /alumni`) and returns the base status response.
 * **`announcementController.js`:**
@@ -481,6 +503,7 @@ The route layer maps incoming HTTP methods and URL paths to their corresponding 
 * **`userRoutes.js` (mounted at `/users`):**
   * `router.get('/', userController.getUsers)`
   * `router.post('/', userController.createUser)`
+  * `router.get('/:id/jobs', userController.getUserJobs)`
   * `router.get('/:id', userController.getUser)`
   * `router.put('/:id', userController.updateUser)`
   * `router.patch('/:id', userController.patchUser)`
@@ -488,6 +511,8 @@ The route layer maps incoming HTTP methods and URL paths to their corresponding 
 * **`apiUserRoutes.js` (mounted at `/api/users`):**
   * `router.get('/', apiUserController.getUsers)`
   * `router.post('/', apiUserController.createUser)`
+  * `router.get('/:id/jobs', apiUserController.getUserJobs)`
+  * `router.post('/:id/jobs', apiUserController.createUserJob)`
   * `router.get('/:id', apiUserController.getUser)`
   * `router.put('/:id', apiUserController.updateUser)`
   * `router.patch('/:id', apiUserController.patchUser)`
@@ -541,6 +566,7 @@ The route layer maps incoming HTTP methods and URL paths to their corresponding 
   * `app.post('/job-postings/:jobPostingId/applications', applicationController.createApplicationForJobPosting)`
   * `app.get('/api/job-postings/:jobPostingId/applications', apiApplicationController.getApplicationsByJobPosting)`
   * `app.post('/api/job-postings/:jobPostingId/applications', apiApplicationController.createApplicationForJobPosting)`
+  *(Not: Kullanıcıya ait iş ilanları nested rotaları `GET /api/users/:id/jobs`, `POST /api/users/:id/jobs` ve `GET /users/:id/jobs`, doğrudan `apiUserRoutes.js` ve `userRoutes.js` modülleri içinde tanımlanmış olup `app.js` üzerinde `/api/users` ve `/users` altına bağlanmıştır).*
 
 Each router file cleanly delegates execution directly to its respective controller.
 
@@ -621,7 +647,7 @@ userController.js (Request Parsing & Business Logic)
  HTML Response (Rendered Page in Browser)
 ```
 
-#### B. REST API Flow (`/api/users`)
+#### B. REST API Flow (`/api/users` & `/api/users/:id/jobs`)
 ```text
 Client Request (API Client / Swagger)
        │
@@ -635,10 +661,10 @@ apiUserRoutes.js (Endpoint Matching)
 apiUserController.js (Request Parsing & Validation)
        │
        ▼
-  userModel.js (MySQL Database via db.js Pool)
+  userModel.js / jobPostingModel.js (MySQL Database via db.js Pool)
        │
        ▼
- JSON Response ({ id: 1, name: "...", email: "..." })
+ JSON Response ({ id: 1, ... } or [ { id: 1, user_id: 1, ... } ])
 ```
 
 ---
@@ -785,9 +811,9 @@ apiApplicationController.js (Request Parsing, Status Check & Validation)
   * Initializing the Express instance.
   * Registering global middleware (`cors`, `express.json`, `express.urlencoded`).
   * Mounting direct route modules (`app.use('/users', userRoutes)`, `app.use('/api/users', apiUserRoutes)`, `app.use('/announcements', announcementRoutes)`, `app.use('/api/announcements', apiAnnouncementRoutes)`, `app.use('/job-postings', jobPostingRoutes)`, `app.use('/api/job-postings', apiJobPostingRoutes)`, `app.use('/applications', applicationRoutes)`, `app.use('/api/applications', apiApplicationRoutes)`, `app.use('/alumni', alumniRoutes)`).
-  * Registering nested routes (`/job-postings/:jobPostingId/applications`, `/api/job-postings/:jobPostingId/applications`, and `/api/users/:id/jobs`).
+  * Registering nested application routes directly (`/job-postings/:jobPostingId/applications` and `/api/job-postings/:jobPostingId/applications`), while nested user job routes (`/api/users/:id/jobs` and `/users/:id/jobs`) are cleanly encapsulated within their respective router modules (`apiUserRoutes` and `userRoutes`).
   * Configuring OpenAPI 3.0 specifications and serving Swagger UI (`/api/swagger`).
   * Starting the HTTP server on the configured port.
-* **Database Persistence Achieved:** The transition from temporary in-memory arrays to persistent MySQL 8.0 relational database storage is complete for all four tables (`users`, `announcements`, `job_postings`, `applications`). All models query MySQL via parameterized prepared statements (`?`), all controller handlers asynchronously coordinate operations using `await`, and data persists across Docker container and server restarts via the named volume `mysql_data` (Docker Compose tarafından proje önekiyle `alumni_mysql_data` olarak adlandırılır).
+* **Database Persistence Achieved:** The transition from temporary in-memory arrays to persistent MySQL 8.0 relational database storage is complete for all four tables (`users`, `announcements`, `job_postings`, `applications`). All models query MySQL via parameterized prepared statements (`?`), all controller handlers asynchronously coordinate operations using `await`, and data persists across Docker container and server restarts via the persistent named volume `mysql_data` (defined under `volumes:` in `docker-compose.yml` as `mysql_data`, which Docker Compose automatically provisions on the host using the project prefix as `alumni_mysql_data`).
 * **Containerization & Reproducibility:** The complete stack is Dockerized via `docker-compose.yml` and `backend/Dockerfile`. The backend container waits for MySQL healthiness before booting, guaranteeing robust and reproducible deployments across development and production environments.
 

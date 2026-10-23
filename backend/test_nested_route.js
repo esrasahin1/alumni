@@ -1,16 +1,16 @@
 const assert = require('assert');
 const http = require('http');
-const app = require('./src/app');
 const userModel = require('./src/models/userModel');
 const jobPostingModel = require('./src/models/jobPostingModel');
-const { getPool } = require('./src/config/db');
 
-function request(server, path, method = 'GET', body = null) {
+const BASE_URL = process.env.TEST_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
+const parsedUrl = new URL(BASE_URL);
+
+function request(path, method = 'GET', body = null) {
   return new Promise((resolve, reject) => {
-    const addr = server.address();
     const options = {
-      hostname: '127.0.0.1',
-      port: addr.port,
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
       path: path,
       method: method,
       headers: {
@@ -47,30 +47,54 @@ function request(server, path, method = 'GET', body = null) {
 
 async function runTests() {
   console.log('🧪 Starting Nested API Route Test Suite (GET & POST /api/users/:id/jobs)...\n');
+  console.log(`📡 Connecting to running server at ${BASE_URL} ...`);
 
-  // Start temporary server on random port
-  const server = http.createServer(app);
-  await new Promise((resolve) => server.listen(0, resolve));
-  const port = server.address().port;
-  console.log(`📡 Test server running on port ${port}`);
+  // Sunucu aktiflik kontrolü
+  try {
+    const health = await request('/api/health');
+    if (health.status !== 200) {
+      throw new Error(`Sunucu beklenmeyen bir durum kodu döndü: ${health.status}`);
+    }
+    console.log(`✅ Sunucu aktif ve erişilebilir (${BASE_URL})\n`);
+  } catch (err) {
+    console.error(`\n❌ Sunucuya bağlanılamadı (${BASE_URL}). Lütfen önce sunucunun (veya Docker konteynerinin) çalıştığından emin olun.`);
+    console.error(`Hata detayı: ${err.message}\n`);
+    process.exit(1);
+  }
 
   const createdJobIds = [];
 
   try {
     // 1. Test existing users in database
-    console.log('\n--- Test 1: Fetching existing users from DB ---');
+    console.log('--- Test 1: Fetching existing users from DB ---');
     const users = await userModel.getAllUsers();
     assert(users.length > 0, 'Database should have users');
-    const testUser = users[0];
-    console.log(`✅ Found user #${testUser.id} (${testUser.name}, ${testUser.email})`);
 
-    // Clean any prior test jobs with title 'TEST_NESTED_JOB%'
-    const pool = await getPool();
-    await pool.query('DELETE FROM job_postings WHERE title LIKE ?', ['TEST_NESTED_JOB%']);
+    // İlanı olmayan bir test kullanıcısı ve izolasyon için ikinci bir kullanıcı belirle
+    let testUser = null;
+    let otherUser = null;
+
+    for (const u of users) {
+      const existingJobs = await jobPostingModel.getJobPostingsByUserId(u.id);
+      if ((!existingJobs || existingJobs.length === 0) && !testUser) {
+        testUser = u;
+      } else if (!otherUser && u !== testUser) {
+        otherUser = u;
+      }
+    }
+
+    if (!testUser) {
+      testUser = users[0];
+    }
+    if (!otherUser) {
+      otherUser = users.find(u => u.id !== testUser.id) || testUser;
+    }
+
+    console.log(`✅ Selected test user #${testUser.id} (${testUser.name}, ${testUser.email})`);
 
     // 2. Test GET 404 for non-existent user ID
     console.log('\n--- Test 2: GET /api/users/999999/jobs (Non-existent user) ---');
-    const resGetNonExistent = await request(server, '/api/users/999999/jobs');
+    const resGetNonExistent = await request('/api/users/999999/jobs');
     console.log(`Status: ${resGetNonExistent.status}, Response:`, resGetNonExistent.body);
     assert.strictEqual(resGetNonExistent.status, 404, 'Status should be 404');
     assert.strictEqual(resGetNonExistent.body.message, 'Kullanıcı bulunamadı', 'Message should be "Kullanıcı bulunamadı"');
@@ -78,7 +102,7 @@ async function runTests() {
 
     // 3. Test GET 404 for invalid user ID format
     console.log('\n--- Test 3: GET /api/users/invalid_id/jobs (Invalid ID) ---');
-    const resGetInvalid = await request(server, '/api/users/invalid_id/jobs');
+    const resGetInvalid = await request('/api/users/invalid_id/jobs');
     console.log(`Status: ${resGetInvalid.status}, Response:`, resGetInvalid.body);
     assert.strictEqual(resGetInvalid.status, 404, 'Status should be 404');
     assert.strictEqual(resGetInvalid.body.message, 'Kullanıcı bulunamadı');
@@ -86,7 +110,7 @@ async function runTests() {
 
     // 4. Test GET 200 empty array for user with no jobs
     console.log(`\n--- Test 4: GET /api/users/${testUser.id}/jobs (User with no jobs yet; existing NULL user_id jobs excluded) ---`);
-    const resEmpty = await request(server, `/api/users/${testUser.id}/jobs`);
+    const resEmpty = await request(`/api/users/${testUser.id}/jobs`);
     console.log(`Status: ${resEmpty.status}, Response:`, resEmpty.body);
     assert.strictEqual(resEmpty.status, 200, 'Status should be 200');
     assert(Array.isArray(resEmpty.body), 'Response body should be an array');
@@ -95,7 +119,7 @@ async function runTests() {
 
     // 5. Test POST /api/users/:id/jobs with normal user -> 201 Created
     console.log(`\n--- Test 5: POST /api/users/${testUser.id}/jobs (Create job for user via nested route) ---`);
-    const resNestedPost = await request(server, `/api/users/${testUser.id}/jobs`, 'POST', {
+    const resNestedPost = await request(`/api/users/${testUser.id}/jobs`, 'POST', {
       title: 'TEST_NESTED_JOB Senior AI Engineer',
       company: 'DeepTech Corp',
       location: 'Istanbul / Remote',
@@ -114,7 +138,7 @@ async function runTests() {
 
     // 6. Test POST /api/users/:id/jobs with body containing a different user_id -> URL ID must take precedence!
     console.log(`\n--- Test 6: POST /api/users/${testUser.id}/jobs with spoofed user_id in body ---`);
-    const resSpoof = await request(server, `/api/users/${testUser.id}/jobs`, 'POST', {
+    const resSpoof = await request(`/api/users/${testUser.id}/jobs`, 'POST', {
       user_id: 888888,
       userId: 777777,
       title: 'TEST_NESTED_JOB Security Specialist',
@@ -132,7 +156,7 @@ async function runTests() {
 
     // 7. Test POST 404 for non-existent user ID
     console.log('\n--- Test 7: POST /api/users/999999/jobs (Non-existent user) ---');
-    const resPostNonExistent = await request(server, '/api/users/999999/jobs', 'POST', {
+    const resPostNonExistent = await request('/api/users/999999/jobs', 'POST', {
       title: 'TEST_NESTED_JOB Ghost Job',
       company: 'Ghost Corp',
       description: 'This job must not be created because user does not exist'
@@ -144,7 +168,7 @@ async function runTests() {
 
     // 8. Test POST 404 for invalid user ID format
     console.log('\n--- Test 8: POST /api/users/invalid_id/jobs (Invalid user ID) ---');
-    const resPostInvalid = await request(server, '/api/users/invalid_id/jobs', 'POST', {
+    const resPostInvalid = await request('/api/users/invalid_id/jobs', 'POST', {
       title: 'TEST_NESTED_JOB Invalid Job',
       company: 'Invalid Corp',
       description: 'Should fail with 404'
@@ -156,7 +180,7 @@ async function runTests() {
 
     // 9. Test POST 400 for missing required fields
     console.log(`\n--- Test 9: POST /api/users/${testUser.id}/jobs with missing fields ---`);
-    const resPostMissing = await request(server, `/api/users/${testUser.id}/jobs`, 'POST', {
+    const resPostMissing = await request(`/api/users/${testUser.id}/jobs`, 'POST', {
       title: 'TEST_NESTED_JOB Only Title'
       // company and description missing
     });
@@ -167,7 +191,7 @@ async function runTests() {
 
     // 10. Verify GET /api/users/:id/jobs returns the newly created jobs
     console.log(`\n--- Test 10: GET /api/users/${testUser.id}/jobs (User now has 2 created jobs) ---`);
-    const resWithJobs = await request(server, `/api/users/${testUser.id}/jobs`);
+    const resWithJobs = await request(`/api/users/${testUser.id}/jobs`);
     console.log(`Status: ${resWithJobs.status}, Found jobs count: ${resWithJobs.body.length}`);
     assert.strictEqual(resWithJobs.status, 200, 'Status should be 200');
     assert(Array.isArray(resWithJobs.body), 'Response body should be an array');
@@ -176,20 +200,17 @@ async function runTests() {
     console.log('✅ GET /api/users/:id/jobs still works perfectly and returns both created jobs!');
 
     // 11. Verify user isolation (another user sees empty array)
-    if (users.length > 1) {
-      const otherUser = users[1];
-      console.log(`\n--- Test 11: GET /api/users/${otherUser.id}/jobs (Another user: ${otherUser.email}) ---`);
-      const resOtherUser = await request(server, `/api/users/${otherUser.id}/jobs`);
-      assert.strictEqual(resOtherUser.status, 200, 'Status should be 200');
-      assert(Array.isArray(resOtherUser.body), 'Response body should be an array');
-      const hasTestJob = resOtherUser.body.some(j => createdJobIds.includes(j.id));
-      assert.strictEqual(hasTestJob, false, 'Other user should not see testUser jobs');
-      console.log('✅ User isolation verified! Only testUser sees their nested jobs.');
-    }
+    console.log(`\n--- Test 11: GET /api/users/${otherUser.id}/jobs (Another user: ${otherUser.email}) ---`);
+    const resOtherUser = await request(`/api/users/${otherUser.id}/jobs`);
+    assert.strictEqual(resOtherUser.status, 200, 'Status should be 200');
+    assert(Array.isArray(resOtherUser.body), 'Response body should be an array');
+    const hasTestJob = resOtherUser.body.some(j => createdJobIds.includes(j.id));
+    assert.strictEqual(hasTestJob, false, 'Other user should not see testUser jobs');
+    console.log('✅ User isolation verified! Only testUser sees their nested jobs.');
 
     // 12. Test Swagger documentation contains both GET and POST for /api/users/{id}/jobs
     console.log('\n--- Test 12: Verify Swagger doc.json contains GET and POST for /api/users/{id}/jobs ---');
-    const resSwagger = await request(server, '/api/swagger/doc.json');
+    const resSwagger = await request('/api/swagger/doc.json');
     assert.strictEqual(resSwagger.status, 200, 'Swagger doc should return 200');
     const usersJobsPath = resSwagger.body.paths['/api/users/{id}/jobs'];
     assert(usersJobsPath, 'Swagger paths should include /api/users/{id}/jobs');
@@ -199,36 +220,36 @@ async function runTests() {
 
     // 13. Verify other existing endpoints still work
     console.log('\n--- Test 13: Verify existing endpoints are intact ---');
-    const resUsers = await request(server, '/api/users');
+    const resUsers = await request('/api/users');
     assert.strictEqual(resUsers.status, 200, '/api/users should return 200');
 
-    const resUserDetail = await request(server, `/api/users/${testUser.id}`);
+    const resUserDetail = await request(`/api/users/${testUser.id}`);
     assert.strictEqual(resUserDetail.status, 200, `/api/users/${testUser.id} should return 200`);
 
-    const resJobs = await request(server, '/api/job-postings');
+    const resJobs = await request('/api/job-postings');
     assert.strictEqual(resJobs.status, 200, '/api/job-postings should return 200');
 
-    const resHealth = await request(server, '/api/health');
+    const resHealth = await request('/api/health');
     assert.strictEqual(resHealth.status, 200, '/api/health should return 200');
     assert.strictEqual(resHealth.body.status, 'ok');
     console.log('✅ Existing endpoints (/api/users, /api/users/:id, /api/job-postings, /api/health) verified intact!');
 
     console.log('\n🎉 ALL NESTED ROUTE TESTS PASSED SUCCESSFULLY! 🎉\n');
   } finally {
-    // Clean up created test job postings
+    // Yalnızca bu test çalıştırmasında oluşturulan test iş ilanlarını temizle
     if (createdJobIds.length > 0) {
-      console.log(`🧹 Cleaning up ${createdJobIds.length} test job posting(s)...`);
+      console.log(`🧹 Cleaning up ${createdJobIds.length} test job posting(s) created by this run...`);
       for (const id of createdJobIds) {
         await jobPostingModel.deleteJobPosting(id);
       }
-      console.log('✅ Test job postings cleaned up.');
+      console.log('✅ Temporary test job postings cleaned up.');
     }
-    server.close();
-    process.exit(0);
   }
 }
 
-runTests().catch((err) => {
+runTests().then(() => {
+  process.exit(0);
+}).catch((err) => {
   console.error('\n❌ TEST FAILED:', err);
   process.exit(1);
 });
