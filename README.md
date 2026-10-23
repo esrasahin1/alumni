@@ -173,7 +173,7 @@ All active endpoints and status codes available in the project are listed in the
 | **`GET`** | `/api/users/:id/jobs` | Lists job postings created by a specific user (Nested Route) | `200 OK` | `404 Not Found` |
 | **`POST`** | `/api/users/:id/jobs` | Creates a new job posting on behalf of a specific user (Nested Route) | `201 Created` | `400 Bad Request`, `404 Not Found` |
 | **`PUT`** | `/api/users/:id` | Updates all information of the specified user (ID preserved) | `200 OK` | `404 Not Found`, `409 Conflict` |
-| **`PATCH`** | `/api/users/:id` | Partially updates only the submitted fields of the specified user | `200 OK` | `404 Not Found` |
+| **`PATCH`** | `/api/users/:id` | Partially updates only the submitted fields of the specified user | `200 OK` | `404 Not Found`, `409 Conflict` |
 | **`DELETE`** | `/api/users/:id` | Deletes the user with the specified ID from the system | `204 No Content` | `404 Not Found` |
 | **`GET`** | `/announcements` | Announcement list and management interface (HTML View) | `200 OK` | - |
 | **`POST`** | `/announcements` | Adds a new announcement (HTML View) | `201 Created` | - |
