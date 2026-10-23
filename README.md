@@ -45,9 +45,13 @@ To build and start the entire stack (MySQL 8.0 database and Node.js backend serv
 
 To run the MySQL database in Docker and the Node.js application in your local terminal:
 
+> 💡 **Directory Note for Beginners:**
+> * **Docker Compose commands** (`docker compose ...`) must be run in the **project root directory** (`alumni/`) where `docker-compose.yml` is located.
+> * **npm commands** (`npm install`, `npm run migrate`, `npm run seed`, `npm start`, `npm test`) must be run in the **`backend` directory** (`alumni/backend/`) where `package.json` resides.
+
 #### 1. Install Dependencies
 
-Navigate to the `backend` directory in your terminal and install the required packages:
+From the project root directory (`alumni/`), navigate into the `backend/` directory and install the required packages:
 
 ```bash
 cd backend
@@ -57,15 +61,19 @@ npm install
 #### 2. Start the Database and Run Migrations (Database Migration)
 
 1. **Start the MySQL Database Container:**
+   Return to the **project root directory** (`alumni/`) where `docker-compose.yml` is located (or open a second terminal), then launch the MySQL container:
    ```bash
+   cd ..
    docker compose up -d db
    ```
 2. **Apply Migrations:**
+   Navigate back into the **`backend/` directory** to run migration commands:
    ```bash
    cd backend
    npm run migrate
    ```
 3. **Verify Migration Status and Tables:**
+   Still in the **`backend/` directory**, verify that all migration scripts applied cleanly:
    ```bash
    npm run migrate:status
    npm run migrate:verify
@@ -74,10 +82,9 @@ npm install
 
 #### 3. Load Sample Data (Database Seeding)
 
-To insert sample records (`users`, `announcements`, `job_postings`) into the database for testing and development in a safe and idempotent manner:
+Still in the **`backend/` directory**, insert sample records (`users`, `announcements`, `job_postings`) into the database in a safe and idempotent manner:
 
 ```bash
-cd backend
 npm run seed
 # or alternatively:
 npm run db:seed
@@ -86,7 +93,7 @@ npm run db:seed
 
 #### 4. Start the Server
 
-To start the application:
+Still in the **`backend/` directory**, start the application:
 
 ```bash
 npm start
@@ -96,14 +103,15 @@ The server starts by default at **`http://localhost:3000`**.
 
 #### 5. Run Tests (Automated Test Suite)
 
-> ℹ️ **Important Prerequisite:** The test suite (`test_nested_route.js`) performs end-to-end verification by sending direct HTTP requests to the running backend server. Therefore, before running tests, the backend application **must already be running** (either via Docker container or via `cd backend && npm start` at `http://127.0.0.1:3000`).
+> ℹ️ **Important Prerequisite:** The test suite (`test_nested_route.js`) performs end-to-end verification by sending direct HTTP requests to the running backend server. Therefore, before running tests, the backend application **must already be running** (either via Docker container or via `npm start` in the `backend/` directory at `http://127.0.0.1:3000`).
 
-To verify nested API route functionality (`GET & POST /api/users/:id/jobs`), parameter precedence, error states (400, 404), and Swagger compliance:
+Open a separate terminal, navigate into the **`backend/` directory**, and run:
 
 ```bash
+cd backend
 npm test
 ```
-*(This command runs the `test_nested_route.js` test suite, automatically verifying 13 scenarios against the running server).*
+*(This command runs the `test_nested_route.js` test suite configured in `backend/package.json`, automatically verifying 13 scenarios against the running server).*
 
 ---
 
