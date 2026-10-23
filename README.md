@@ -26,18 +26,22 @@ There are two methods to run the project:
 
 ### Method A: Full Stack with Docker Compose (Recommended)
 
-To build and start the entire stack (MySQL 8.0 database and Node.js backend service) with a single command:
+To build and start the entire stack (MySQL 8.0 database and Node.js backend service) with a single command from the project root:
 
-1. **Start the Containers:**
-   ```bash
-   docker compose up -d --build
-   ```
-2. **Run Migrations and Seeders:**
-   ```bash
-   docker compose exec backend npm run migrate
-   docker compose exec backend npm run seed
-   ```
-3. The application will be accessible at `http://localhost:3000`, and Swagger UI will be available at `http://localhost:3000/api/swagger`.
+```bash
+docker compose up -d --build
+```
+
+*(On container startup, the backend service automatically waits for MySQL to become healthy, applies all pending schema migrations, loads initial seed data idempotently, and starts the Express server).*
+
+The application will be accessible at `http://localhost:3000`, and Swagger UI will be available at `http://localhost:3000/api/swagger`.
+
+> 💡 **Optional Verification:**
+> To manually inspect migration or seed status inside the running container at any time:
+> ```bash
+> docker compose exec backend npm run migrate:status
+> docker compose exec backend npm run migrate:verify
+> ```
 
 ---
 

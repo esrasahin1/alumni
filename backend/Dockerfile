@@ -16,5 +16,5 @@ COPY . .
 # Expose application port
 EXPOSE 3000
 
-# Start server
-CMD ["npm", "start"]
+# Apply migrations, seed sample data, and start server
+CMD ["sh", "-c", "npm run migrate && npm run seed && npm start"]

@@ -18,6 +18,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   # Backend Service: Node.js Express Application
   # Prerequisite Note: Requires backend/Dockerfile to build the image.

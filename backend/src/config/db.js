@@ -55,18 +55,36 @@ function getDbConfig(resolvedHost = null) {
 
 /**
  * Creates and returns a direct MySQL connection.
+ * Supports automatic retries for transient startup connection delays.
  */
-async function createConnection() {
+async function createConnection(options = {}) {
+  const retries = (options && options.retries) || 5;
+  const delayMs = (options && options.delayMs) || 2000;
+
   const host = await resolveHost();
   const config = getDbConfig(host);
-  return await mysql.createConnection({
-    host: config.host,
-    port: config.port,
-    user: config.user,
-    password: config.password,
-    database: config.database,
-    multipleStatements: true
-  });
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await mysql.createConnection({
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        password: config.password,
+        database: config.database,
+        multipleStatements: true
+      });
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        console.log(`[DB] Waiting for database connection (${config.host}:${config.port})... Attempt ${attempt}/${retries} failed (${err.code || err.message}). Retrying in ${delayMs / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 /**
