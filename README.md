@@ -119,6 +119,7 @@ Sunucu ayağa kalktıktan sonra aşağıdaki web arayüzlerine tarayıcınızdan
 | **Ana Portal Dashboard** | [http://localhost:3000/](http://localhost:3000/) | Kullanıcılar, Duyurular, İş İlanları, Başvurular ve Swagger dokümantasyonuna hızlı erişim sağlayan merkezi dashboard. |
 | **Kullanıcı Yönetimi** | [http://localhost:3000/users](http://localhost:3000/users) | Tüm mezun ve öğrencileri listeleme, yeni kullanıcı oluşturma, detay görüntüleme, güncelleme ve silme. |
 | **Kullanıcı Detay Sayfası** | [http://localhost:3000/users/:id](http://localhost:3000/users/1) | ID'si verilen kullanıcının profil detaylarını görüntüleme, güncelleme ve silme arayüzü. |
+| **Kullanıcı İlanları (Nested)** | [http://localhost:3000/api/users/:id/jobs](http://localhost:3000/api/users/1/jobs) | Belirli bir kullanıcının oluşturduğu iş ilanlarını listeler (JSON API). |
 | **Duyuru Yönetimi** | [http://localhost:3000/announcements](http://localhost:3000/announcements) | Duyuru listesi, yeni duyuru yayınlama, detay inceleme, düzenleme ve silme. |
 | **Duyuru Detay Sayfası** | [http://localhost:3000/announcements/:id](http://localhost:3000/announcements/1) | Seçilen duyurunun başlık, içerik ve yayın tarihi detaylarını görüntüleme, düzenleme ve silme arayüzü. |
 | **İş İlanları (Job Postings)** | [http://localhost:3000/job-postings](http://localhost:3000/job-postings) | Aktif iş ve staj ilanlarını listeleme, yeni ilan yayınlama, düzenleme ve silme. Tablo üzerinden doğrudan ilanın başvurularına erişim. |
@@ -148,6 +149,8 @@ Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki ta
 | **`GET`** | `/api/users` | Sistemdeki tüm kullanıcıları liste olarak döner (JSON) | `200 OK` | - |
 | **`POST`** | `/api/users` | Yeni bir kullanıcı kaydeder (Otomatik artan ID atar) | `201 Created` | `409 Conflict` |
 | **`GET`** | `/api/users/:id` | ID'si verilen belirli bir kullanıcının detaylarını getirir | `200 OK` | `404 Not Found` |
+| **`GET`** | `/api/users/:id/jobs` | Belirli bir kullanıcının oluşturduğu iş ilanlarını listeler (Nested Route) | `200 OK` | `404 Not Found` |
+| **`POST`** | `/api/users/:id/jobs` | Belirli bir kullanıcı adına yeni iş ilanı oluşturur (Nested Route) | `201 Created` | `400 Bad Request`, `404 Not Found` |
 | **`PUT`** | `/api/users/:id` | Belirtilen kullanıcının tüm bilgilerini günceller (ID korunur) | `200 OK` | `404 Not Found`, `409 Conflict` |
 | **`PATCH`** | `/api/users/:id` | Belirtilen kullanıcının sadece gönderilen alanlarını günceller | `200 OK` | `404 Not Found` |
 | **`DELETE`** | `/api/users/:id` | Belirtilen ID'ye sahip kullanıcıyı sistemden siler | `204 No Content` | `404 Not Found` |
@@ -377,6 +380,7 @@ backend/src/
   Job posting data is persistently stored in the `job_postings` table of the MySQL 8.0 relational database (`alumni_db`) using the connection pool via `mysql2/promise` (`backend/src/config/db.js`).
 * **Table Schema & Attributes:**
   * `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
+  * `user_id`: `INT UNSIGNED NULL` (Foreign key referencing `users(id)` with `ON DELETE SET NULL ON UPDATE CASCADE`. Identifies the user who created the job posting; `NULL` for legacy or unassigned postings)
   * `title`: `VARCHAR(255) NOT NULL`
   * `company`: `VARCHAR(255) NOT NULL`
   * `location`: `VARCHAR(255) NULL`
@@ -385,12 +389,13 @@ backend/src/
   * `created_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
   * `updated_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`
 * **Normalization & Safe Parameterization:**
-  Provides `formatJobPosting(row)` to normalize row structures into consistent formats (including `createdAt` and `createdDate` ISO strings). All SQL queries strictly use parameterized placeholders (`?`). Invalid, non-numeric, or missing IDs return `null` or `false` without runtime exceptions.
+  Provides `formatJobPosting(row)` to normalize row structures into consistent formats (including `user_id`, `userId`, `createdAt`, and `createdDate` ISO strings). All SQL queries strictly use parameterized placeholders (`?`). Invalid, non-numeric, or missing IDs return `null` or `false` without runtime exceptions.
 * **Provided Async CRUD Functions:**
-  * **`getAllJobPostings()`**: Queries `SELECT id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings ORDER BY id ASC` and returns all normalized job posting objects.
+  * **`getAllJobPostings()`**: Queries `SELECT id, user_id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings ORDER BY id ASC` and returns all normalized job posting objects.
   * **`getJobPostingById(id)`**: Queries `SELECT ... FROM job_postings WHERE id = ? LIMIT 1` and returns the matching job posting or `null`.
-  * **`createJobPosting(jobPostingData)`**: Inserts a new job posting (`INSERT INTO job_postings (title, company, location, description, contact_email) VALUES (?, ?, ?, ?, ?)`) and returns the newly created record with generated ID and timestamps.
-  * **`updateJobPosting(id, jobPostingData, isPartial = false)`**: Replaces all fields (`UPDATE job_postings SET title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?`), returning the updated record or `null`.
+  * **`getJobPostingsByUserId(userId)`**: First verifies that the target user exists in `users` (`SELECT id, name, email FROM users WHERE id = ? LIMIT 1`). If the user does not exist, returns `null` (enabling 404 response). If the user exists, returns an array of job postings where `user_id = ?` (ordered by `id ASC`).
+  * **`createJobPosting(jobPostingData)`**: Inserts a new job posting (`INSERT INTO job_postings (user_id, title, company, location, description, contact_email) VALUES (?, ?, ?, ?, ?, ?)`) and returns the newly created record with generated ID and timestamps.
+  * **`updateJobPosting(id, jobPostingData, isPartial = false)`**: Replaces all fields (`UPDATE job_postings SET user_id = ?, title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?`), returning the updated record or `null`.
   * **`patchJobPosting(id, partialData)`**: Calls `updateJobPosting(id, partialData, true)` to partially update only the provided fields, keeping existing fields intact.
   * **`deleteJobPosting(id)`**: Removes the job posting record (`DELETE FROM job_postings WHERE id = ?`) and returns a boolean success flag (`true`/`false`).
 
@@ -568,12 +573,12 @@ The presentation layer is implemented through modular view rendering files using
 * **`jobPostingView.js`:**
   * Generates the complete HTML interface for the `/job-postings` and `/job-postings/:id` endpoints.
   * Powers the interactive **Job Posting Management** screen with full CRUD support:
-    * **Create**: "Yeni İş İlanı Yayınla" form with Title, Company, Location, Description, and Contact Email inputs (`POST /job-postings`).
-    * **Read (List)**: Structured table with `ID`, `Başlık & Şirket`, `Konum`, `Açıklama`, `İletişim`, `Oluşturulma`, and `İşlemler` columns.
-    * **Read (Details)**: Dedicated detail page (`GET /job-postings/:id`) presenting full position info, timestamps, and prominent action buttons:
+    * **Create**: "Yeni İş İlanı Yayınla" form with User ID (optional foreign key), Title, Company, Location, Description, and Contact Email inputs (`POST /job-postings`).
+    * **Read (List)**: Structured table with `ID`, `Başlık`, `Şirket`, `Kullanıcı ID`, `Konum`, `İletişim`, `Tarih`, and `İşlemler` columns.
+    * **Read (Details)**: Dedicated detail page (`GET /job-postings/:id`) presenting full position info, linked user owner (`user_id`), timestamps, and prominent action buttons:
       * **📋 Bu İlanın Başvurularını Gör**: Direct link to the nested applications page (`/job-postings/:id/applications`).
       * **✍️ Bu İlana Başvur**: Direct link jumping straight to the application form (`/job-postings/:id/applications#apply`).
-    * **Update (Edit)**: In-page editing functionality (`editJob(job)`) that populates the form, shifts to "İş İlanını Düzenle (#id)", and dispatches `PUT /job-postings/:id` requests.
+    * **Update (Edit)**: In-page editing functionality (`editJob(job)`) that populates the form including `user_id`, shifts to "İş İlanını Düzenle (#id)", and dispatches `PUT /job-postings/:id` requests.
     * **Delete**: Delete button triggering confirmed `DELETE /job-postings/:id` requests to remove the job posting.
   * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
 * **`applicationView.js`:**
@@ -780,7 +785,7 @@ apiApplicationController.js (Request Parsing, Status Check & Validation)
   * Initializing the Express instance.
   * Registering global middleware (`cors`, `express.json`, `express.urlencoded`).
   * Mounting direct route modules (`app.use('/users', userRoutes)`, `app.use('/api/users', apiUserRoutes)`, `app.use('/announcements', announcementRoutes)`, `app.use('/api/announcements', apiAnnouncementRoutes)`, `app.use('/job-postings', jobPostingRoutes)`, `app.use('/api/job-postings', apiJobPostingRoutes)`, `app.use('/applications', applicationRoutes)`, `app.use('/api/applications', apiApplicationRoutes)`, `app.use('/alumni', alumniRoutes)`).
-  * Registering nested routes (`/job-postings/:jobPostingId/applications` and `/api/job-postings/:jobPostingId/applications`).
+  * Registering nested routes (`/job-postings/:jobPostingId/applications`, `/api/job-postings/:jobPostingId/applications`, and `/api/users/:id/jobs`).
   * Configuring OpenAPI 3.0 specifications and serving Swagger UI (`/api/swagger`).
   * Starting the HTTP server on the configured port.
 * **Database Persistence Achieved:** The transition from temporary in-memory arrays to persistent MySQL 8.0 relational database storage is complete for all four tables (`users`, `announcements`, `job_postings`, `applications`). All models query MySQL via parameterized prepared statements (`?`), all controller handlers asynchronously coordinate operations using `await`, and data persists across Docker container and server restarts via the named volume `mysql_data` (Docker Compose tarafından proje önekiyle `alumni_mysql_data` olarak adlandırılır).

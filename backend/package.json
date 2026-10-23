@@ -10,7 +10,8 @@
     "migrate:down": "node src/database/migrate.js down",
     "migrate:verify": "node src/database/migrate.js verify",
     "seed": "node src/database/seed.js",
-    "db:seed": "node src/database/seed.js"
+    "db:seed": "node src/database/seed.js",
+    "test": "node test_nested_route.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

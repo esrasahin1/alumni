@@ -61,6 +61,9 @@ const createJobPosting = async (req, res) => {
     const newJobPosting = await jobPostingModel.createJobPosting(body);
     res.status(201).json(newJobPosting);
   } catch (error) {
+    if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
+      return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
@@ -96,6 +99,9 @@ const updateJobPosting = async (req, res) => {
 
     res.status(200).json(updatedJobPosting);
   } catch (error) {
+    if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
+      return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
@@ -120,6 +126,9 @@ const patchJobPosting = async (req, res) => {
 
     res.status(200).json(updatedJobPosting);
   } catch (error) {
+    if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
+      return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
@@ -148,11 +157,37 @@ const deleteJobPosting = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/users/:id/jobs
+ * Belirli bir kullanıcının oluşturduğu iş ilanlarını döner.
+ */
+const getUserJobs = async (req, res) => {
+  try {
+    const id = req && req.params && req.params.id;
+
+    if (!id || isNaN(Number(id))) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    const jobPostings = await jobPostingModel.getJobPostingsByUserId(id);
+
+    if (jobPostings === null) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    return res.status(200).json(jobPostings);
+  } catch (error) {
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
+  }
+};
+
 module.exports = {
   getJobPostings,
   getAllJobPostings: getJobPostings,
   getJobPosting,
   getJobPostingById: getJobPosting,
+  getUserJobs,
+  getJobPostingsByUser: getUserJobs,
   createJobPosting,
   updateJobPosting,
   patchJobPosting,

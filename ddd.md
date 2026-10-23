@@ -138,6 +138,7 @@ The `Job Posting` entity represents career opportunities, job listings, and inte
 | Field Name | MySQL Column Type | Constraints | Description & Behavior |
 | :--- | :--- | :--- | :--- |
 | `id` | `INT UNSIGNED` | `PRIMARY KEY AUTO_INCREMENT` | Unique numeric identifier for the job posting. Auto-incremented by MySQL. |
+| `user_id` | `INT UNSIGNED` | `NULL`, `FOREIGN KEY REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE` | Optional foreign key referencing the user who published the job posting (`users(id)`). Set to `NULL` for legacy or unassigned postings. |
 | `title` | `VARCHAR(255)` | `NOT NULL` | Headline or position title of the job opening (e.g., "Full Stack Developer"). |
 | `company` | `VARCHAR(255)` | `NOT NULL` | Hiring organization or company name. |
 | `location` | `VARCHAR(255)` | `NULL` | Work location or arrangement (e.g., "Istanbul / Hybrid", "Remote"). Optional. |
@@ -315,11 +316,13 @@ All data operations are asynchronous (`async/await`) and execute parameterized S
 | **Announcement**| **Update (Full)**| `updateAnnouncement(id, data)`| `PUT /announcements/:id`<br>`PUT /api/announcements/:id`| `UPDATE announcements SET title = ?, content = ? WHERE id = ?` |
 | **Announcement**| **Update (Part)**| `patchAnnouncement(id, part)`| `PATCH /announcements/:id`<br>`PATCH /api/announcements/:id`| `UPDATE announcements SET title = ?, content = ? WHERE id = ?` *(retains untouched fields)* |
 | **Announcement**| **Delete** | `deleteAnnouncement(id)` | `DELETE /announcements/:id`<br>`DELETE /api/announcements/:id`| `DELETE FROM announcements WHERE id = ?` |
-| **Job Posting** | **Create** | `createJobPosting(data)` | `POST /job-postings`<br>`POST /api/job-postings` | `INSERT INTO job_postings (title, company, location, description, contact_email) VALUES (?, ?, ?, ?, ?)` |
-| **Job Posting** | **Read (All)** | `getAllJobPostings()` | `GET /job-postings`<br>`GET /api/job-postings` | `SELECT id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings ORDER BY id ASC` |
-| **Job Posting** | **Read (One)** | `getJobPostingById(id)` | `GET /job-postings/:id`<br>`GET /api/job-postings/:id` | `SELECT id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings WHERE id = ? LIMIT 1` |
-| **Job Posting** | **Update (Full)**| `updateJobPosting(id, data)` | `PUT /job-postings/:id`<br>`PUT /api/job-postings/:id` | `UPDATE job_postings SET title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?` |
-| **Job Posting** | **Update (Part)**| `patchJobPosting(id, part)` | `PATCH /job-postings/:id`<br>`PATCH /api/job-postings/:id` | `UPDATE job_postings SET title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?` *(retains untouched fields)* |
+| **Job Posting** | **Create** | `createJobPosting(data)` | `POST /job-postings`<br>`POST /api/job-postings` | `INSERT INTO job_postings (user_id, title, company, location, description, contact_email) VALUES (?, ?, ?, ?, ?, ?)` |
+| **Job Posting** | **Create (By User)**| `createJobPosting(data)` | `POST /api/users/:id/jobs` | `INSERT INTO job_postings (user_id, title, company, location, description, contact_email) VALUES (?, ?, ?, ?, ?, ?)` *(user_id URL'den alınır)* |
+| **Job Posting** | **Read (All)** | `getAllJobPostings()` | `GET /job-postings`<br>`GET /api/job-postings` | `SELECT id, user_id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings ORDER BY id ASC` |
+| **Job Posting** | **Read (One)** | `getJobPostingById(id)` | `GET /job-postings/:id`<br>`GET /api/job-postings/:id` | `SELECT id, user_id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings WHERE id = ? LIMIT 1` |
+| **Job Posting** | **Read (By User)** | `getJobPostingsByUserId(userId)` | `GET /api/users/:id/jobs`<br>`GET /users/:id/jobs` | `SELECT id, user_id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings WHERE user_id = ? ORDER BY id ASC` |
+| **Job Posting** | **Update (Full)**| `updateJobPosting(id, data)` | `PUT /job-postings/:id`<br>`PUT /api/job-postings/:id` | `UPDATE job_postings SET user_id = ?, title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?` |
+| **Job Posting** | **Update (Part)**| `patchJobPosting(id, part)` | `PATCH /job-postings/:id`<br>`PATCH /api/job-postings/:id` | `UPDATE job_postings SET user_id = ?, title = ?, company = ?, location = ?, description = ?, contact_email = ? WHERE id = ?` *(retains untouched fields)* |
 | **Job Posting** | **Delete** | `deleteJobPosting(id)` | `DELETE /job-postings/:id`<br>`DELETE /api/job-postings/:id` | `DELETE FROM job_postings WHERE id = ?` |
 | **Application** | **Create** | `createApplication(data)` | `POST /applications`<br>`POST /api/applications`<br>`POST /api/job-postings/:jobId/applications` | `INSERT INTO applications (job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status) VALUES (?, ?, ?, ?, ?, ?, ?)` |
 | **Application** | **Read (All)** | `getAllApplications()` | `GET /applications`<br>`GET /api/applications` | `SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications ORDER BY id ASC` |
@@ -339,6 +342,7 @@ All data operations are asynchronous (`async/await`) and execute parameterized S
   * `002_create_announcements_table.sql` & `.js`: Creates `announcements` table.
   * `003_create_job_postings_table.sql` & `.js`: Creates `job_postings` table.
   * `004_create_applications_table.sql` & `.js`: Creates `applications` table.
+  * `005_add_user_id_to_job_postings.sql` & `.js`: Adds `user_id` with foreign key constraint referencing `users(id)` (`ON DELETE SET NULL ON UPDATE CASCADE`).
 * Commands:
   * `npm run migrate`: Applies all pending migrations in alphabetical order within a new batch.
   * `npm run migrate:status`: Displays executed vs. pending migrations table.

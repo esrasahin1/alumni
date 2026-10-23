@@ -1,4 +1,5 @@
 const userModel = require('../models/userModel');
+const jobPostingModel = require('../models/jobPostingModel');
 const userView = require('../views/userView');
 
 /**
@@ -183,9 +184,43 @@ const deleteUser = async (req, res) => {
   }
 };
 
+/**
+ * GET /users/:id/jobs (Kullanıcının Oluşturduğu İş İlanları - Nested Route)
+ */
+const getUserJobs = async (req, res) => {
+  try {
+    const id = req && req.params && req.params.id;
+
+    if (!id || isNaN(Number(id))) {
+      if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      }
+      const html = userView.renderUserNotFoundPage(id);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(html);
+    }
+
+    const jobPostings = await jobPostingModel.getJobPostingsByUserId(id);
+
+    if (jobPostings === null) {
+      if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      }
+      const html = userView.renderUserNotFoundPage(id);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(html);
+    }
+
+    return res.status(200).json(jobPostings);
+  } catch (error) {
+    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+  }
+};
+
 module.exports = {
   getUsers,
   getUser,
+  getUserJobs,
   createUser,
   updateUser,
   patchUser,

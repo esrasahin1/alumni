@@ -5,6 +5,7 @@ const userController = require('../controllers/userController');
 // User CRUD rotaları
 router.get('/', userController.getUsers);
 router.post('/', userController.createUser);
+router.get('/:id/jobs', userController.getUserJobs);
 router.get('/:id', userController.getUser);
 router.put('/:id', userController.updateUser);
 router.patch('/:id', userController.patchUser);

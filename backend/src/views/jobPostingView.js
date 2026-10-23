@@ -194,6 +194,7 @@ const renderJobPostingsPage = (jobPostings = []) => {
           </a>
         </td>
         <td><span class="badge" style="background:#e2e8f0; color:#2d3748;">${escapeHtml(job.company)}</span></td>
+        <td>${job.user_id ? `<a href="/users/${escapeHtml(job.user_id)}" style="color:#2b6cb0; font-weight:600;">#${escapeHtml(job.user_id)}</a>` : '<span class="text-muted">-</span>'}</td>
         <td>${escapeHtml(job.location || '-')}</td>
         <td>${escapeHtml(job.contact_email || '-')}</td>
         <td class="text-muted">${escapeHtml(job.createdDate || job.createdAt || job.created_at || '-')}</td>
@@ -205,13 +206,17 @@ const renderJobPostingsPage = (jobPostings = []) => {
         </td>
       </tr>
     `).join('')
-    : `<tr><td colspan="7" style="text-align: center; color: #718096; padding: 24px;">Henüz kayıtlı bir iş ilanı bulunmuyor.</td></tr>`;
+    : `<tr><td colspan="8" style="text-align: center; color: #718096; padding: 24px;">Henüz kayıtlı bir iş ilanı bulunmuyor.</td></tr>`;
 
   const content = `
     <h2>➕ Yeni İş İlanı Ekle</h2>
     <div class="card">
       <form id="jobForm" method="POST" action="/job-postings">
         <input type="hidden" id="editJobId" name="_id" value="" />
+        <div class="form-group">
+          <label for="user_id">Kullanıcı ID (İlan Sahibi - Opsiyonel)</label>
+          <input type="number" id="user_id" name="user_id" placeholder="Örn: 1 (Kayıtlı kullanıcı ID'si)" min="1" />
+        </div>
         <div class="form-group">
           <label for="title">İş / Pozisyon Başlığı *</label>
           <input type="text" id="title" name="title" required placeholder="Örn: Full Stack Developer" />
@@ -244,6 +249,7 @@ const renderJobPostingsPage = (jobPostings = []) => {
           <th>ID</th>
           <th>Başlık</th>
           <th>Şirket</th>
+          <th>Kullanıcı ID</th>
           <th>Konum</th>
           <th>İletişim</th>
           <th>Tarih</th>
@@ -258,6 +264,7 @@ const renderJobPostingsPage = (jobPostings = []) => {
     <script>
       function editJob(job) {
         document.getElementById('editJobId').value = job.id;
+        document.getElementById('user_id').value = (job.user_id !== null && job.user_id !== undefined) ? job.user_id : '';
         document.getElementById('title').value = job.title || '';
         document.getElementById('company').value = job.company || '';
         document.getElementById('location').value = job.location || '';
@@ -270,6 +277,7 @@ const renderJobPostingsPage = (jobPostings = []) => {
 
       function resetForm() {
         document.getElementById('editJobId').value = '';
+        document.getElementById('user_id').value = '';
         document.getElementById('jobForm').reset();
         document.getElementById('submitBtn').innerText = 'İş İlanı Yayınla';
         document.getElementById('cancelBtn').style.display = 'none';
@@ -279,7 +287,9 @@ const renderJobPostingsPage = (jobPostings = []) => {
         var editId = document.getElementById('editJobId').value;
         if (editId) {
           e.preventDefault();
+          var userIdVal = document.getElementById('user_id').value;
           var payload = {
+            user_id: userIdVal ? Number(userIdVal) : null,
             title: document.getElementById('title').value,
             company: document.getElementById('company').value,
             location: document.getElementById('location').value,
@@ -324,6 +334,7 @@ const renderJobPostingDetailPage = (job) => {
     <div class="card">
       <h2>${escapeHtml(job.title)}</h2>
       <p><strong>Şirket:</strong> <span class="badge" style="background:#e2e8f0; color:#2d3748;">${escapeHtml(job.company)}</span></p>
+      <p><strong>İlan Sahibi (Kullanıcı):</strong> ${job.user_id ? `<a href="/users/${escapeHtml(job.user_id)}" style="color: #2b6cb0; font-weight: 600;">#${escapeHtml(job.user_id)}</a>` : 'Belirtilmedi'}</p>
       <p><strong>Konum:</strong> ${escapeHtml(job.location || 'Belirtilmedi')}</p>
       <p><strong>İletişim:</strong> ${job.contact_email ? `<a href="mailto:${escapeHtml(job.contact_email)}">${escapeHtml(job.contact_email)}</a>` : 'Belirtilmedi'}</p>
       <p><strong>Yayın Tarihi:</strong> <span class="text-muted">${escapeHtml(job.createdDate || job.createdAt || job.created_at || '-')}</span></p>

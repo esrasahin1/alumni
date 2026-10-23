@@ -1,4 +1,5 @@
 const userModel = require('../models/userModel');
+const jobPostingModel = require('../models/jobPostingModel');
 const apiUserView = require('../views/apiUserView');
 
 /**
@@ -170,9 +171,86 @@ const deleteUser = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/users/:id/jobs (Kullanıcının Oluşturduğu İş İlanları - Nested API Route)
+ * Belirli bir kullanıcının oluşturduğu iş ilanlarını JSON dizisi olarak döner.
+ * - Kullanıcı bulunamazsa: 404 Not Found { message: "Kullanıcı bulunamadı" }
+ * - Kullanıcı mevcut ama ilanı yoksa: 200 OK []
+ * - Kullanıcı mevcut ve ilanları varsa: 200 OK [ { ... }, { ... } ]
+ */
+const getUserJobs = async (req, res) => {
+  try {
+    const id = req && req.params && req.params.id;
+
+    if (!id || isNaN(Number(id))) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    const jobPostings = await jobPostingModel.getJobPostingsByUserId(id);
+
+    if (jobPostings === null) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    return res.status(200).json(jobPostings);
+  } catch (error) {
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
+  }
+};
+
+/**
+ * POST /api/users/:id/jobs (Kullanıcı Adına Yeni İş İlanı Oluşturma - Nested API Route)
+ * Belirli bir kullanıcının ID'sini (id) URL'den alarak o kullanıcı adına yeni bir iş ilanı oluşturur.
+ * - Kullanıcı bulunamazsa veya geçersiz ID ise: 404 Not Found { message: "Kullanıcı bulunamadı" }
+ * - Zorunlu alanlar (title, company, description) eksikse: 400 Bad Request
+ * - Sahiplik belirlemek için URL'deki ID kullanılır; body içindeki user_id dikkate alınmaz.
+ * - Başarılı: 201 Created ve oluşturulan iş ilanı nesnesi (user_id = URL'deki ID)
+ */
+const createUserJob = async (req, res) => {
+  try {
+    const id = req && req.params && req.params.id;
+
+    if (!id || isNaN(Number(id))) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    const targetUserId = Number(id);
+    const user = await userModel.getUserById(targetUserId);
+
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    const body = req && req.body;
+    const title = body && body.title !== undefined ? String(body.title).trim() : '';
+    const company = body && body.company !== undefined ? String(body.company).trim() : '';
+    const description = body && body.description !== undefined ? String(body.description).trim() : '';
+
+    if (!title || !company || !description) {
+      return res.status(400).json({
+        message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur."
+      });
+    }
+
+    // Body içinde user_id / userId ne gönderilirse gönderilsin URL'den alınan targetUserId esas alınır
+    const jobPayload = {
+      ...(body || {}),
+      user_id: targetUserId,
+      userId: targetUserId
+    };
+
+    const newJobPosting = await jobPostingModel.createJobPosting(jobPayload);
+    return res.status(201).json(newJobPosting);
+  } catch (error) {
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
+  }
+};
+
 module.exports = {
   getUsers,
   getUser,
+  getUserJobs,
+  createUserJob,
   createUser,
   updateUser,
   patchUser,

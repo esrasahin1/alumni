@@ -5,6 +5,8 @@ const apiUserController = require('../controllers/apiUserController');
 // /api/users CRUD rotaları
 router.get('/', apiUserController.getUsers);
 router.post('/', apiUserController.createUser);
+router.get('/:id/jobs', apiUserController.getUserJobs);
+router.post('/:id/jobs', apiUserController.createUserJob);
 router.get('/:id', apiUserController.getUser);
 router.put('/:id', apiUserController.updateUser);
 router.patch('/:id', apiUserController.patchUser);

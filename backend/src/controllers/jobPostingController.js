@@ -123,6 +123,13 @@ const createJobPosting = async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(201).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Yayınlandı</title></head><body><h1>İş İlanı Başarıyla Yayınlandı</h1><p>ID: ${newJobPosting.id}</p><p>Başlık: ${newJobPosting.title}</p></body></html>`);
   } catch (error) {
+    if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Belirtilen kullanıcı (user_id) sistemde kayıtlı değil.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };
@@ -179,6 +186,13 @@ const updateJobPosting = async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Güncellendi</title></head><body><h1>İş İlanı Başarıyla Güncellendi</h1><p>ID: ${updatedJobPosting.id}</p><p>Başlık: ${updatedJobPosting.title}</p></body></html>`);
   } catch (error) {
+    if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Belirtilen kullanıcı (user_id) sistemde kayıtlı değil.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };
@@ -235,6 +249,13 @@ const patchJobPosting = async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Güncellendi</title></head><body><h1>İş İlanı Kısmi Olarak Güncellendi</h1><p>ID: ${updatedJobPosting.id}</p><p>Başlık: ${updatedJobPosting.title}</p></body></html>`);
   } catch (error) {
+    if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Belirtilen kullanıcı (user_id) sistemde kayıtlı değil.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };

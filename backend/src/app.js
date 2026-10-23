@@ -585,6 +585,121 @@ const swaggerDocument = {
         }
       }
     },
+    "/api/users/{id}/jobs": {
+      get: {
+        tags: ["ApiUser", "JobPosting"],
+        summary: "Belirli bir kullanıcının oluşturduğu iş ilanlarını listeler (Nested Route)",
+        description: "URL'deki kullanıcı ID'sine (id) karşılık gelen kullanıcının oluşturduğu tüm iş ilanlarını (job_postings.user_id ilişkisi üzerinden) döner. Kullanıcı bulunamazsa 404, kullanıcının henüz ilanı yoksa boş dizi ([]) döner.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "İş ilanları getirilmek istenen kullanıcının ID'si"
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Kullanıcıya ait iş ilanları listesi (ilan yoksa boş dizi döner)",
+            content: {
+              "application/json": {
+                example: [
+                  {
+                    id: 1,
+                    user_id: 1,
+                    title: "Full Stack Developer",
+                    company: "Tech Alumni Corp",
+                    location: "Istanbul / Hybrid",
+                    description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
+                    contact_email: "esra.sahin@alumni.edu.tr",
+                    createdAt: "2026-10-21T09:40:00.000Z",
+                    createdDate: "2026-10-21T09:40:00.000Z"
+                  }
+                ]
+              }
+            }
+          },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      },
+      post: {
+        tags: ["ApiUser", "JobPosting"],
+        summary: "Belirli bir kullanıcı adına yeni iş ilanı oluşturur (Nested Route)",
+        description: "URL'deki kullanıcı ID'sine (id) karşılık gelen kullanıcı adına yeni bir iş ilanı kaydeder. Kullanıcı bulunamazsa 404 döner. İlan sahipliği (user_id) için URL'deki ID esas alınır; body içindeki user_id dikkate alınmaz.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", example: 1 },
+            description: "İş ilanı oluşturulacak kullanıcının ID'si"
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", example: "Full Stack Developer" },
+                  company: { type: "string", example: "Tech Alumni Corp" },
+                  location: { type: "string", example: "Istanbul / Hybrid" },
+                  description: { type: "string", example: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks." },
+                  contact_email: { type: "string", example: "careers@techalumni.com" }
+                },
+                required: ["title", "company", "description"]
+              }
+            }
+          }
+        },
+        responses: {
+          "201": {
+            description: "İş ilanı kullanıcı adına başarıyla oluşturuldu",
+            content: {
+              "application/json": {
+                example: {
+                  id: 1,
+                  user_id: 1,
+                  userId: 1,
+                  title: "Full Stack Developer",
+                  company: "Tech Alumni Corp",
+                  location: "Istanbul / Hybrid",
+                  description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
+                  contact_email: "careers@techalumni.com",
+                  createdAt: "2026-10-21T09:40:00.000Z",
+                  createdDate: "2026-10-21T09:40:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            description: "Zorunlu alanlar eksik",
+            content: {
+              "application/json": {
+                example: { message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur." }
+              }
+            }
+          },
+          "404": {
+            description: "Kullanıcı bulunamadı",
+            content: {
+              "application/json": {
+                example: { message: "Kullanıcı bulunamadı" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/users": {
       get: {
         tags: ["User"],
