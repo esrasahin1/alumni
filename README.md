@@ -1,269 +1,269 @@
 # 🎓 Alumni Tracking System API
 
-## 📖 Proje Açıklaması
+## 📖 Project Description
 
-Bu proje, **Web Programlama** dersi kapsamında geliştirilmekte olan bir **Mezun Takip Sistemi (Alumni Tracking System)** RESTful API uygulamasıdır. 
+This project is a RESTful API application for an **Alumni Tracking System**, developed as part of the **Web Programming** course curriculum.
 
-Sistem, mezunlar ve öğrenciler arasındaki iletişimi güçlendirmeyi, kariyer takibini kolaylaştırmayı ve kurumsal ağı desteklemeyi amaçlamaktadır. Proje mimarisi Node.js ve Express.js üzerine inşa edilmiş olup, modüler ve genişletilebilir bir yapıda tasarlanmıştır.
+The system aims to strengthen communication between alumni and students, streamline career tracking, and foster institutional networking. The project architecture is built on Node.js and Express.js, designed with a modular and extensible structure.
 
 ---
 
-## 🛠️ Kullanılan Teknolojiler
+## 🛠️ Technologies Used
 
-* **Çalışma Ortamı:** Node.js (v20+)
+* **Runtime Environment:** Node.js (v20+)
 * **Web Framework:** Express.js (v4.19)
-* **Dokümantasyon & Test Arayüzü:** Swagger UI (`swagger-ui-express` ve OpenAPI 3.0)
-* **Veritabanı & Kalıcılık:** MySQL 8.0, `mysql2` (`mysql2/promise` Connection Pool), Docker Named Volume (`docker-compose.yml` mantıksal adı: `mysql_data`, proje adına bağlı oluşturulan fiziksel ad: `alumni_mysql_data`)
-* **Migrasyon & Seeder:** Node.js tabanlı Migration Runner (`backend/src/database/migrate.js`) ve Idempotent Seeder (`backend/src/database/seed.js`)
-* **Konteynerizasyon:** Docker, Docker Compose (Multi-container: `db` + `backend`)
-* **Ara Katmanlar (Middleware):** CORS, Express JSON Parser, Express URL-Encoded Parser
+* **Documentation & Testing Interface:** Swagger UI (`swagger-ui-express` and OpenAPI 3.0)
+* **Database & Persistence:** MySQL 8.0, `mysql2` (`mysql2/promise` Connection Pool), Docker Named Volume (logical name in `docker-compose.yml`: `mysql_data`, physical name created based on the project name: `alumni_mysql_data`)
+* **Migration & Seeder:** Node.js-based Migration Runner (`backend/src/database/migrate.js`) and Idempotent Seeder (`backend/src/database/seed.js`)
+* **Containerization:** Docker, Docker Compose (Multi-container: `db` + `backend`)
+* **Middleware:** CORS, Express JSON Parser, Express URL-Encoded Parser
 
 ---
 
-## ⚙️ Kurulum ve Çalıştırma
+## ⚙️ Installation & Running
 
-Projeyi çalıştırmak için iki yöntem bulunmaktadır:
+There are two methods to run the project:
 
-### Yöntem A: Docker Compose ile Tam Yığın (Önerilen)
+### Method A: Full Stack with Docker Compose (Recommended)
 
-Tüm yığını (MySQL 8.0 veritabanı ve Node.js backend servisi) tek bir komutla derleyip başlatmak için:
+To build and start the entire stack (MySQL 8.0 database and Node.js backend service) with a single command:
 
-1. **Konteynerleri Başlatın:**
+1. **Start the Containers:**
    ```bash
    docker compose up -d --build
    ```
-2. **Migrasyon ve Seed İşlemlerini Çalıştırın:**
+2. **Run Migrations and Seeders:**
    ```bash
    docker compose exec backend npm run migrate
    docker compose exec backend npm run seed
    ```
-3. Uygulama `http://localhost:3000` adresinde, Swagger UI ise `http://localhost:3000/api/swagger` adresinde yayına girer.
+3. The application will be accessible at `http://localhost:3000`, and Swagger UI will be available at `http://localhost:3000/api/swagger`.
 
 ---
 
-### Yöntem B: Yerel Geliştirme (Hibrit)
+### Method B: Local Development (Hybrid)
 
-MySQL veritabanını Docker üzerinde, Node.js uygulamasını yerel terminalinizde çalıştırmak için:
+To run the MySQL database in Docker and the Node.js application in your local terminal:
 
-#### 1. Bağımlılıkları Yükleyin
+#### 1. Install Dependencies
 
-Terminalde `backend` dizinine geçin ve gerekli paketleri kurun:
+Navigate to the `backend` directory in your terminal and install the required packages:
 
 ```bash
 cd backend
 npm install
 ```
 
-#### 2. Veritabanını Başlatın ve Migrasyonları Çalıştırın (Database Migration)
+#### 2. Start the Database and Run Migrations (Database Migration)
 
-1. **MySQL Veritabanı Konteynerini Başlatın:**
+1. **Start the MySQL Database Container:**
    ```bash
    docker compose up -d db
    ```
-2. **Migrasyonları Uygulayın:**
+2. **Apply Migrations:**
    ```bash
    cd backend
    npm run migrate
    ```
-3. **Migrasyon Durumunu ve Tabloları Doğrulayın:**
+3. **Verify Migration Status and Tables:**
    ```bash
    npm run migrate:status
    npm run migrate:verify
    ```
-*(Geri alma işlemi için `npm run migrate:down` komutu kullanılabilir).*
+*(The rollback operation can be performed using `npm run migrate:down`).*
 
-#### 3. Örnek Verileri Yükleyin (Database Seeding)
+#### 3. Load Sample Data (Database Seeding)
 
-Veritabanına test ve geliştirme amaçlı örnek kayıtları (`users`, `announcements`, `job_postings`) güvenli ve tekrarlanabilir (idempotent) şekilde eklemek için:
+To insert sample records (`users`, `announcements`, `job_postings`) into the database for testing and development in a safe and idempotent manner:
 
 ```bash
 cd backend
 npm run seed
-# veya alternatif olarak:
+# or alternatively:
 npm run db:seed
 ```
-*(Seeder sistemi `userSeeder.js`, `announcementSeeder.js` ve `jobPostingSeeder.js` modüllerini çalıştırır. Tekrar çalıştırıldığında mevcut kayıtlar atlanır, yinelenen veri oluşmaz).*
+*(The seeder system executes the `userSeeder.js`, `announcementSeeder.js`, and `jobPostingSeeder.js` modules. When re-run, existing records are skipped, preventing duplicate data).*
 
-#### 4. Sunucuyu Başlatın
+#### 4. Start the Server
 
-Uygulamayı başlatmak için:
+To start the application:
 
 ```bash
 npm start
 ```
 
-Sunucu varsayılan olarak **`http://localhost:3000`** adresinde çalışmaya başlar.
+The server starts by default at **`http://localhost:3000`**.
 
-#### 5. Testleri Çalıştırın (Otomatik Test Paketi)
+#### 5. Run Tests (Automated Test Suite)
 
-> ℹ️ **Önemli Ön Koşul:** Test paketi (`test_nested_route.js`), çalışan backend sunucusuna doğrudan HTTP istekleri göndererek uçtan uca doğrulama yapar. Bu nedenle testleri çalıştırmadan önce backend uygulamasının (Docker konteyneri ile veya `cd backend && npm start` komutu ile `http://127.0.0.1:3000` adresinde) **çalışıyor olması gerekir**.
+> ℹ️ **Important Prerequisite:** The test suite (`test_nested_route.js`) performs end-to-end verification by sending direct HTTP requests to the running backend server. Therefore, before running tests, the backend application **must already be running** (either via Docker container or via `cd backend && npm start` at `http://127.0.0.1:3000`).
 
-Nested API rota özelliklerini (`GET & POST /api/users/:id/jobs`), parametre önceliklerini, hata durumlarını (400, 404) ve Swagger uyumunu doğrulamak için:
+To verify nested API route functionality (`GET & POST /api/users/:id/jobs`), parameter precedence, error states (400, 404), and Swagger compliance:
 
 ```bash
 npm test
 ```
-*(Bu komut `test_nested_route.js` test paketini çalıştırarak çalışan sunucu üzerinden 13 senaryoyu otomatik doğrular).*
+*(This command runs the `test_nested_route.js` test suite, automatically verifying 13 scenarios against the running server).*
 
 ---
 
-## 🖥️ Kullanıcı Arayüzü (Web UI) ve Sayfa Erişimleri
+## 🖥️ User Interface (Web UI) & Page Navigation
 
-Sistem, tarayıcı üzerinden doğrudan kullanılabilen ve JavaScript gerektirmeyen temel CRUD işlemlerini destekleyen sunucu taraflı render (SSR - Server-Side Rendered) HTML yönetim arayüzlerine sahiptir.
+The system features server-side rendered (SSR) HTML management interfaces that can be used directly from the browser, supporting core CRUD operations without requiring client-side JavaScript.
 
-### 🚀 Uygulamayı Başlatma ve Erişim
+### 🚀 Starting the Application and Access
 
-1. **Docker Compose ile (Önerilen):**
+1. **With Docker Compose (Recommended):**
    ```bash
    docker compose up -d
    ```
-2. **Yerel Node.js ile:**
+2. **With Local Node.js:**
    ```bash
    cd backend
    npm start
    ```
 
-Sunucu ayağa kalktıktan sonra aşağıdaki web arayüzlerine tarayıcınızdan doğrudan erişebilirsiniz:
+Once the server is running, you can access the following web interfaces directly in your browser:
 
-| Sayfa / Modül | URL Adresi | Desteklenen UI Eylemleri ve Açıklama |
+| Page / Module | URL Address | Supported UI Actions & Description |
 | :--- | :--- | :--- |
-| **Ana Portal Dashboard** | [http://localhost:3000/](http://localhost:3000/) | Kullanıcılar, Duyurular, İş İlanları, Başvurular ve Swagger dokümantasyonuna hızlı erişim sağlayan merkezi dashboard. |
-| **Kullanıcı Yönetimi** | [http://localhost:3000/users](http://localhost:3000/users) | Tüm mezun ve öğrencileri listeleme, yeni kullanıcı oluşturma, detay görüntüleme, güncelleme ve silme. |
-| **Kullanıcı Detay Sayfası** | [http://localhost:3000/users/:id](http://localhost:3000/users/1) | ID'si verilen kullanıcının profil detaylarını görüntüleme, güncelleme ve silme arayüzü. |
-| **Kullanıcı İlanları (Nested API)** | [http://localhost:3000/api/users/:id/jobs](http://localhost:3000/api/users/1/jobs) | Belirli bir kullanıcının oluşturduğu iş ilanlarını listeler (JSON API). |
-| **Kullanıcı İlanları (Web)** | [http://localhost:3000/users/:id/jobs](http://localhost:3000/users/1/jobs) | Belirli bir kullanıcının oluşturduğu iş ilanlarını görüntüler (Web / JSON). |
-| **Duyuru Yönetimi** | [http://localhost:3000/announcements](http://localhost:3000/announcements) | Duyuru listesi, yeni duyuru yayınlama, detay inceleme, düzenleme ve silme. |
-| **Duyuru Detay Sayfası** | [http://localhost:3000/announcements/:id](http://localhost:3000/announcements/1) | Seçilen duyurunun başlık, içerik ve yayın tarihi detaylarını görüntüleme, düzenleme ve silme arayüzü. |
-| **İş İlanları (Job Postings)** | [http://localhost:3000/job-postings](http://localhost:3000/job-postings) | Aktif iş ve staj ilanlarını listeleme, yeni ilan yayınlama, düzenleme ve silme. Tablo üzerinden doğrudan ilanın başvurularına erişim. |
-| **İş İlanı Detay Sayfası** | [http://localhost:3000/job-postings/:id](http://localhost:3000/job-postings/1) | Seçilen iş ilanının tam açıklaması, iletişim bilgileri, **ilana ait başvuruları görüntüleme butonu**, **doğrudan bu ilana başvur butonu** ve ilanı silme aksiyonu. |
-| **İlana Özel Başvurular (Nested)** | [http://localhost:3000/job-postings/:jobPostingId/applications](http://localhost:3000/job-postings/1/applications) | Belirli bir iş ilanına gelen başvuruların filtrelenmiş listesi ve sayfa altında o ilana ait otomatik doldurulan **hızlı başvuru formu (`#apply`)**. |
-| **Tüm Başvurular (Applications)** | [http://localhost:3000/applications](http://localhost:3000/applications) | Sistemdeki tüm aday iş başvurularının genel listesi, iş ilanı bağlantıları, CV görüntüleme ve yeni başvuru formu. |
-| **Başvuru Detay & Yönetim** | [http://localhost:3000/applications/:id](http://localhost:3000/applications/1) | Başvuru detayları, ön yazı, CV bağlantısı, **başvuru durumunu güncelleme kontrolü** (`PATCH`: `PENDING`, `REVIEWING`, `ACCEPTED`, `REJECTED`) ve **başvuruyu silme butonu** (`DELETE`). |
-| **Swagger UI (REST API)** | [http://localhost:3000/api/swagger](http://localhost:3000/api/swagger) | Tüm backend REST API uç noktalarını interaktif olarak inceleme ve canlı test etme arayüzü. |
+| **Main Portal Dashboard** | [http://localhost:3000/](http://localhost:3000/) | Central dashboard providing quick access to Users, Announcements, Job Postings, Applications, and Swagger documentation. |
+| **User Management** | [http://localhost:3000/users](http://localhost:3000/users) | List all alumni and students, create new users, view details, update, and delete. |
+| **User Details Page** | [http://localhost:3000/users/:id](http://localhost:3000/users/1) | Interface to view profile details, update, and delete the user specified by ID. |
+| **User Job Postings (Nested API)** | [http://localhost:3000/api/users/:id/jobs](http://localhost:3000/api/users/1/jobs) | Lists job postings created by a specific user (JSON API). |
+| **User Job Postings (Web)** | [http://localhost:3000/users/:id/jobs](http://localhost:3000/users/1/jobs) | Displays job postings created by a specific user (Web / JSON). |
+| **Announcement Management** | [http://localhost:3000/announcements](http://localhost:3000/announcements) | List announcements, publish new announcements, view details, edit, and delete. |
+| **Announcement Details Page** | [http://localhost:3000/announcements/:id](http://localhost:3000/announcements/1) | Interface to view title, content, and creation date details, edit, and delete the selected announcement. |
+| **Job Postings** | [http://localhost:3000/job-postings](http://localhost:3000/job-postings) | List active jobs and internships, publish new postings, edit, and delete. Direct access to applications for a posting from the table. |
+| **Job Posting Details Page** | [http://localhost:3000/job-postings/:id](http://localhost:3000/job-postings/1) | Full description of the selected job posting, contact details, view applications button ("📋 Bu İlanın Başvurularını Gör"), direct apply button ("✍️ Bu İlana Başvur"), navigation link ("← Tüm İlanlara Dön"), and delete action ("Bu İlanı Sil"). |
+| **Job-Specific Applications (Nested)** | [http://localhost:3000/job-postings/:jobPostingId/applications](http://localhost:3000/job-postings/1/applications) | Filtered list of applications received for a specific job posting, with quick application form ("➕ Yeni Başvuru Gönder", `#apply`) auto-filled at the bottom of the page. |
+| **All Applications** | [http://localhost:3000/applications](http://localhost:3000/applications) | Overview list of all candidate job applications in the system, job posting links, resume links, and application submission form ("➕ Yeni Başvuru Gönder"). |
+| **Application Details & Management** | [http://localhost:3000/applications/:id](http://localhost:3000/applications/1) | Application details, cover letter, resume link, status update control ("⚙️ Başvuru Durumunu Güncelle (PATCH)" with options `PENDING`, `REVIEWING`, `ACCEPTED`, `REJECTED` and "Durumu Kaydet" button), and delete button ("🗑️ Başvuruyu Sil"). |
+| **Swagger UI (REST API)** | [http://localhost:3000/api/swagger](http://localhost:3000/api/swagger) | Interactive interface to inspect and test all backend REST API endpoints live. |
 
 ---
 
-## 🔌 API Endpointleri
+## 🔌 API Endpoints
 
-Projede aktif olarak bulunan tüm endpoint'ler ve durum kodları aşağıdaki tabloda listelenmiştir:
+All active endpoints and status codes available in the project are listed in the table below:
 
-| HTTP Metodu | Endpoint | Açıklama | Başarılı Durum | Hata Durumu |
+| HTTP Method | Endpoint | Description | Success Status | Error Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **`GET`** | `/api/health` | Sunucu sağlık ve aktiflik kontrolünü yapar (JSON: `{ status: "ok" }`) | `200 OK` | - |
-| **`GET`** | `/health` | Alternatif sunucu sağlık kontrolü endpoint'i | `200 OK` | - |
-| **`GET`** | `/alumni` | Mezunlar ana durum bilgisi cevabı | `200 OK` | - |
-| **`GET`** | `/users` | Kullanıcı listesi ve yönetim arayüzü (HTML View) | `200 OK` | - |
-| **`POST`** | `/users` | Yeni bir kullanıcı ekler (HTML View) | `201 Created` | `409 Conflict` |
-| **`GET`** | `/users/:id` | ID'si verilen kullanıcının detay sayfasını sunar (HTML View) | `200 OK` | `404 Not Found` |
-| **`GET`** | `/users/:id/jobs` | Belirli bir kullanıcının oluşturduğu iş ilanlarını listeler (HTML / JSON) | `200 OK` | `404 Not Found` |
-| **`PUT`** | `/users/:id` | Kullanıcının tüm bilgilerini günceller (HTML / Fetch) | `200 OK` | `404 Not Found`, `409 Conflict` |
-| **`PATCH`** | `/users/:id` | Kullanıcının alanlarını kısmi olarak günceller (HTML View) | `200 OK` | `404 Not Found`, `409 Conflict` |
-| **`DELETE`** | `/users/:id` | Belirtilen kullanıcıyı sistemden siler (HTML View) | `200 OK` / `204 No Content` | `404 Not Found` |
-| **`GET`** | `/api/users` | Sistemdeki tüm kullanıcıları liste olarak döner (JSON) | `200 OK` | - |
-| **`POST`** | `/api/users` | Yeni bir kullanıcı kaydeder (Otomatik artan ID atar) | `201 Created` | `409 Conflict` |
-| **`GET`** | `/api/users/:id` | ID'si verilen belirli bir kullanıcının detaylarını getirir | `200 OK` | `404 Not Found` |
-| **`GET`** | `/api/users/:id/jobs` | Belirli bir kullanıcının oluşturduğu iş ilanlarını listeler (Nested Route) | `200 OK` | `404 Not Found` |
-| **`POST`** | `/api/users/:id/jobs` | Belirli bir kullanıcı adına yeni iş ilanı oluşturur (Nested Route) | `201 Created` | `400 Bad Request`, `404 Not Found` |
-| **`PUT`** | `/api/users/:id` | Belirtilen kullanıcının tüm bilgilerini günceller (ID korunur) | `200 OK` | `404 Not Found`, `409 Conflict` |
-| **`PATCH`** | `/api/users/:id` | Belirtilen kullanıcının sadece gönderilen alanlarını günceller | `200 OK` | `404 Not Found` |
-| **`DELETE`** | `/api/users/:id` | Belirtilen ID'ye sahip kullanıcıyı sistemden siler | `204 No Content` | `404 Not Found` |
-| **`GET`** | `/announcements` | Duyuru listesi ve yönetim arayüzü (HTML View) | `200 OK` | - |
-| **`POST`** | `/announcements` | Yeni bir duyuru ekler (HTML View) | `201 Created` | - |
-| **`GET`** | `/announcements/:id` | ID'si verilen duyurunun detay sayfasını sunar (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PUT`** | `/announcements/:id` | Duyurunun tüm bilgilerini günceller (HTML / Fetch) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PATCH`** | `/announcements/:id` | Duyurunun alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`DELETE`** | `/announcements/:id` | Belirtilen duyuruyu sistemden siler | `200 OK` / `204 No Content` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/api/announcements` | Sistemdeki tüm duyuruları JSON listesi olarak döner | `200 OK` | - |
-| **`POST`** | `/api/announcements` | Yeni bir duyuru kaydeder (JSON) | `201 Created` | - |
-| **`GET`** | `/api/announcements/:id` | ID'si verilen duyurunun detaylarını getirir (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PUT`** | `/api/announcements/:id` | Duyurunun tüm bilgilerini günceller (ID korunur) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PATCH`** | `/api/announcements/:id` | Duyurunun alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`DELETE`** | `/api/announcements/:id` | Belirtilen ID'ye sahip duyuruyu siler | `204 No Content` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/job-postings` | İş ilanları listesi ve yönetim arayüzü (HTML View) | `200 OK` | - |
-| **`POST`** | `/job-postings` | Yeni bir iş ilanı ekler (HTML View) | `201 Created` | `400 Bad Request` |
-| **`GET`** | `/job-postings/:id` | ID'si verilen iş ilanının detay sayfasını sunar (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PUT`** | `/job-postings/:id` | İş ilanının tüm bilgilerini günceller (HTML / Fetch) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PATCH`** | `/job-postings/:id` | İş ilanının alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`DELETE`** | `/job-postings/:id` | Belirtilen iş ilanını sistemden siler | `200 OK` / `204 No Content` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/api/job-postings` | Sistemdeki tüm iş ilanlarını JSON listesi olarak döner | `200 OK` | - |
-| **`POST`** | `/api/job-postings` | Yeni bir iş ilanı kaydeder (JSON) | `201 Created` | `400 Bad Request` |
-| **`GET`** | `/api/job-postings/:id` | ID'si verilen iş ilanının detaylarını getirir (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PUT`** | `/api/job-postings/:id` | İş ilanının tüm bilgilerini günceller (ID korunur) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PATCH`** | `/api/job-postings/:id` | İş ilanının alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`DELETE`** | `/api/job-postings/:id` | Belirtilen ID'ye sahip iş ilanını siler | `204 No Content` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/applications` | Başvuru listesi ve yeni başvuru formu arayüzü (HTML View) | `200 OK` | - |
-| **`POST`** | `/applications` | Yeni bir başvuru gönderir (HTML View) | `201 Created` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/applications/:id` | ID'si verilen başvurunun detay sayfasını sunar (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PUT`** | `/applications/:id` | Başvurunun tüm bilgilerini günceller (HTML / Fetch) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PATCH`** | `/applications/:id` | Başvurunun durum veya alanlarını kısmi olarak günceller | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`DELETE`** | `/applications/:id` | Belirtilen başvuruyu sistemden siler | `200 OK` / `204 No Content` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına ait başvuruları listeler (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`POST`** | `/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına yeni başvuru oluşturur (HTML View) | `201 Created` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/api/applications` | Sistemdeki tüm başvuruları JSON listesi olarak döner | `200 OK` | - |
-| **`POST`** | `/api/applications` | Yeni bir başvuru kaydeder (JSON) | `201 Created` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/api/applications/:id` | ID'si verilen başvurunun detaylarını getirir (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PUT`** | `/api/applications/:id` | Başvurunun tüm bilgilerini günceller (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`PATCH`** | `/api/applications/:id` | Başvuru durum veya alanlarını kısmi olarak günceller (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`DELETE`** | `/api/applications/:id` | Belirtilen ID'ye sahip başvuruyu siler | `204 No Content` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/api/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına ait başvuruları JSON listesi olarak döner | `200 OK` | `400 Bad Request`, `404 Not Found` |
-| **`POST`** | `/api/job-postings/:jobPostingId/applications` | Belirli bir iş ilanına JSON başvurusu oluşturur | `201 Created` | `400 Bad Request`, `404 Not Found` |
-| **`GET`** | `/api/swagger` | İnteraktif Swagger UI dokümantasyon ekranını sunar | `200 OK` | - |
-| **`GET`** | `/api/swagger/doc.json` | Ham OpenAPI 3.0 JSON dokümantasyonunu döner | `200 OK` | - |
+| **`GET`** | `/api/health` | Performs server health and activity check (JSON: `{ status: "ok" }`) | `200 OK` | - |
+| **`GET`** | `/health` | Alternative server health check endpoint | `200 OK` | - |
+| **`GET`** | `/alumni` | Returns alumni base status information response | `200 OK` | - |
+| **`GET`** | `/users` | User list and management interface (HTML View) | `200 OK` | - |
+| **`POST`** | `/users` | Adds a new user (HTML View) | `201 Created` | `409 Conflict` |
+| **`GET`** | `/users/:id` | Renders detail page for user specified by ID (HTML View) | `200 OK` | `404 Not Found` |
+| **`GET`** | `/users/:id/jobs` | Lists job postings created by a specific user (HTML / JSON) | `200 OK` | `404 Not Found` |
+| **`PUT`** | `/users/:id` | Updates all user information (HTML / Fetch) | `200 OK` | `404 Not Found`, `409 Conflict` |
+| **`PATCH`** | `/users/:id` | Partially updates user fields (HTML View) | `200 OK` | `404 Not Found`, `409 Conflict` |
+| **`DELETE`** | `/users/:id` | Deletes the specified user from the system (HTML View) | `200 OK` / `204 No Content` | `404 Not Found` |
+| **`GET`** | `/api/users` | Returns all users in the system as a list (JSON) | `200 OK` | - |
+| **`POST`** | `/api/users` | Registers a new user (Assigns auto-incrementing ID) | `201 Created` | `409 Conflict` |
+| **`GET`** | `/api/users/:id` | Retrieves details of a specific user specified by ID | `200 OK` | `404 Not Found` |
+| **`GET`** | `/api/users/:id/jobs` | Lists job postings created by a specific user (Nested Route) | `200 OK` | `404 Not Found` |
+| **`POST`** | `/api/users/:id/jobs` | Creates a new job posting on behalf of a specific user (Nested Route) | `201 Created` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/api/users/:id` | Updates all information of the specified user (ID preserved) | `200 OK` | `404 Not Found`, `409 Conflict` |
+| **`PATCH`** | `/api/users/:id` | Partially updates only the submitted fields of the specified user | `200 OK` | `404 Not Found` |
+| **`DELETE`** | `/api/users/:id` | Deletes the user with the specified ID from the system | `204 No Content` | `404 Not Found` |
+| **`GET`** | `/announcements` | Announcement list and management interface (HTML View) | `200 OK` | - |
+| **`POST`** | `/announcements` | Adds a new announcement (HTML View) | `201 Created` | - |
+| **`GET`** | `/announcements/:id` | Renders detail page for announcement specified by ID (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/announcements/:id` | Updates all information of the announcement (HTML / Fetch) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/announcements/:id` | Partially updates fields of the announcement | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/announcements/:id` | Deletes the specified announcement from the system | `200 OK` / `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/announcements` | Returns all announcements in the system as a JSON list | `200 OK` | - |
+| **`POST`** | `/api/announcements` | Registers a new announcement (JSON) | `201 Created` | - |
+| **`GET`** | `/api/announcements/:id` | Retrieves details of the announcement specified by ID (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/api/announcements/:id` | Updates all information of the announcement (ID preserved) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/api/announcements/:id` | Partially updates fields of the announcement | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/api/announcements/:id` | Deletes the announcement with the specified ID | `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/job-postings` | Job postings list and management interface (HTML View) | `200 OK` | - |
+| **`POST`** | `/job-postings` | Adds a new job posting (HTML View) | `201 Created` | `400 Bad Request` |
+| **`GET`** | `/job-postings/:id` | Renders detail page for job posting specified by ID (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/job-postings/:id` | Updates all information of the job posting (HTML / Fetch) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/job-postings/:id` | Partially updates fields of the job posting | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/job-postings/:id` | Deletes the specified job posting from the system | `200 OK` / `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/job-postings` | Returns all job postings in the system as a JSON list | `200 OK` | - |
+| **`POST`** | `/api/job-postings` | Registers a new job posting (JSON) | `201 Created` | `400 Bad Request` |
+| **`GET`** | `/api/job-postings/:id` | Retrieves details of the job posting specified by ID (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/api/job-postings/:id` | Updates all information of the job posting (ID preserved) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/api/job-postings/:id` | Partially updates fields of the job posting | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/api/job-postings/:id` | Deletes the job posting with the specified ID | `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/applications` | Application list and new application form interface (HTML View) | `200 OK` | - |
+| **`POST`** | `/applications` | Submits a new application (HTML View) | `201 Created` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/applications/:id` | Renders detail page for application specified by ID (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/applications/:id` | Updates all information of the application (HTML / Fetch) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/applications/:id` | Partially updates status or fields of the application | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/applications/:id` | Deletes the specified application from the system | `200 OK` / `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/job-postings/:jobPostingId/applications` | Lists applications for a specific job posting (HTML View) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`POST`** | `/job-postings/:jobPostingId/applications` | Creates a new application for a specific job posting (HTML View) | `201 Created` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/applications` | Returns all applications in the system as a JSON list | `200 OK` | - |
+| **`POST`** | `/api/applications` | Registers a new application (JSON) | `201 Created` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/applications/:id` | Retrieves details of the application specified by ID (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PUT`** | `/api/applications/:id` | Updates all information of the application (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`PATCH`** | `/api/applications/:id` | Partially updates status or fields of the application (JSON) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`DELETE`** | `/api/applications/:id` | Deletes the application with the specified ID | `204 No Content` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/job-postings/:jobPostingId/applications` | Returns applications for a specific job posting as a JSON list | `200 OK` | `400 Bad Request`, `404 Not Found` |
+| **`POST`** | `/api/job-postings/:jobPostingId/applications` | Creates a JSON application for a specific job posting | `201 Created` | `400 Bad Request`, `404 Not Found` |
+| **`GET`** | `/api/swagger` | Serves interactive Swagger UI documentation interface | `200 OK` | - |
+| **`GET`** | `/api/swagger/doc.json` | Returns raw OpenAPI 3.0 JSON documentation | `200 OK` | - |
 
 ---
 
-## 📑 Swagger UI Dokümantasyonu
+## 📑 Swagger UI Documentation
 
-Projenin tüm API endpoint'leri interaktif Swagger UI arayüzü ile belgelenmiştir.
+All API endpoints of the project are documented with an interactive Swagger UI interface.
 
-* **Swagger UI Adresi:** [http://localhost:3000/api/swagger](http://localhost:3000/api/swagger)
-* **Ham OpenAPI JSON:** [http://localhost:3000/api/swagger/doc.json](http://localhost:3000/api/swagger/doc.json)
+* **Swagger UI Address:** [http://localhost:3000/api/swagger](http://localhost:3000/api/swagger)
+* **Raw OpenAPI JSON:** [http://localhost:3000/api/swagger/doc.json](http://localhost:3000/api/swagger/doc.json)
 
-### Swagger UI ile Canlı Test:
-1. Tarayıcınızdan `http://localhost:3000/api/swagger` adresine gidin.
-2. Test etmek istediğiniz endpoint'in üzerine tıklayın.
-3. Sağ üstteki **"Try it out"** butonuna basın.
-4. Gerekli parametre veya JSON gövdesini girdikten sonra **"Execute"** butonuna tıklayarak doğrudan canlı API yanıtını görüntüleyin.
+### Live Testing with Swagger UI:
+1. Navigate to `http://localhost:3000/api/swagger` in your browser.
+2. Click on the endpoint you want to test.
+3. Click the **"Try it out"** button in the upper right.
+4. After entering the required parameters or JSON request body, click the **"Execute"** button to view the live API response directly.
 
 ---
 
-## 📌 Geliştirme Kuralı
+## 📌 Development Rule
 
-> ⚠️ **Önemli Kural:**
-> Projeye yeni bir endpoint veya API özelliği eklendiğinde:
-> 1. `backend/src/app.js` içerisindeki **Swagger/OpenAPI dokümantasyonu (`swaggerDocument`)** güncellenmelidir.
-> 2. **README.md** dosyasındaki API tablosu ve ilgili açıklamalar güncellenmelidir.
+> ⚠️ **Important Rule:**
+> When adding a new endpoint or API feature to the project:
+> 1. The **Swagger/OpenAPI documentation (`swaggerDocument`)** in `backend/src/app.js` must be updated.
+> 2. The API table and related descriptions in **README.md** must be updated.
 > 
-> Böylece dokümantasyon ve canlı sistem her zaman birbiriyle tam senkronize kalır.
+> This ensures that the documentation and the live system always remain fully synchronized.
 
 ---
 
-## 📂 Proje Dizin Yapısı
+## 📂 Project Directory Structure
 
 ```text
 alumni/
 ├── backend/
 │   ├── src/
-│   │   ├── config/           # Veritabanı bağlantı havuzu (db.js)
-│   │   ├── controllers/      # İstek kontrolcüleri ve iş mantığı
-│   │   ├── database/         # Migrasyonlar, tohumlayıcılar (seeders) ve factory'ler
-│   │   │   ├── factories/    # Mock veri üreticileri (userFactory, announcementFactory, jobPostingFactory)
-│   │   │   ├── migrations/   # SQL/JS şema göç dosyaları (users, announcements, job_postings, applications, user_id FK)
-│   │   │   ├── seeds/        # Tekrarlanabilir örnek veri tohumlayıcıları (users, announcements, job_postings)
-│   │   │   ├── migrate.js    # Migrasyon CLI çalıştırıcısı
-│   │   │   └── seed.js       # Seed CLI çalıştırıcısı
-│   │   ├── models/           # MySQL 8.0 veri modelleri ve asenkron CRUD sorguları
-│   │   ├── routes/           # API ve web rota tanımlamaları
-│   │   ├── views/            # HTML arayüz ve sayfa şablonları
-│   │   └── app.js            # Express sunucusu, ara katmanlar ve Swagger konfigürasyonu
-│   ├── test_nested_route.js  # Nested API rota test paketi (GET & POST /api/users/:id/jobs)
-│   ├── .dockerignore         # Docker derleme hariç tutma kuralları
-│   ├── Dockerfile            # Backend Docker konteyner yapılandırması
-│   ├── package.json          # Proje bağımlılıkları ve script'ler
+│   │   ├── config/           # Database connection pool (db.js)
+│   │   ├── controllers/      # Request controllers and business logic
+│   │   ├── database/         # Migrations, seeders, and factories
+│   │   │   ├── factories/    # Mock data generators (userFactory, announcementFactory, jobPostingFactory)
+│   │   │   ├── migrations/   # SQL/JS schema migration files (users, announcements, job_postings, applications, user_id FK)
+│   │   │   ├── seeds/        # Idempotent sample data seeders (users, announcements, job_postings)
+│   │   │   ├── migrate.js    # Migration CLI runner
+│   │   │   └── seed.js       # Seed CLI runner
+│   │   ├── models/           # MySQL 8.0 data models and asynchronous CRUD queries
+│   │   ├── routes/           # API and web route definitions
+│   │   ├── views/            # HTML UI and page templates
+│   │   └── app.js            # Express server, middleware, and Swagger configuration
+│   ├── test_nested_route.js  # Nested API route test suite (GET & POST /api/users/:id/jobs)
+│   ├── .dockerignore         # Docker build ignore rules
+│   ├── Dockerfile            # Backend Docker container configuration
+│   ├── package.json          # Project dependencies and scripts
 │   └── package-lock.json
-├── docker-compose.yml        # Multi-container mimari (MySQL 8.0 + Node.js Backend)
-├── ddd.md                    # Veri Tasarım Dokümantasyonu (Data Design Documentation)
-└── README.md                 # Proje dokümantasyonu ve API kılavuzu
+├── docker-compose.yml        # Multi-container architecture (MySQL 8.0 + Node.js Backend)
+├── ddd.md                    # Data Design Documentation
+└── README.md                 # Project documentation and API guide
 ```
 
 ---
@@ -566,7 +566,7 @@ The route layer maps incoming HTTP methods and URL paths to their corresponding 
   * `app.post('/job-postings/:jobPostingId/applications', applicationController.createApplicationForJobPosting)`
   * `app.get('/api/job-postings/:jobPostingId/applications', apiApplicationController.getApplicationsByJobPosting)`
   * `app.post('/api/job-postings/:jobPostingId/applications', apiApplicationController.createApplicationForJobPosting)`
-  *(Not: Kullanıcıya ait iş ilanları nested rotaları `GET /api/users/:id/jobs`, `POST /api/users/:id/jobs` ve `GET /users/:id/jobs`, doğrudan `apiUserRoutes.js` ve `userRoutes.js` modülleri içinde tanımlanmış olup `app.js` üzerinde `/api/users` ve `/users` altına bağlanmıştır).*
+  *(Note: The nested user job posting routes `GET /api/users/:id/jobs`, `POST /api/users/:id/jobs`, and `GET /users/:id/jobs` are defined directly within the `apiUserRoutes.js` and `userRoutes.js` modules and mounted under `/api/users` and `/users` in `app.js`).*
 
 Each router file cleanly delegates execution directly to its respective controller.
 
@@ -599,23 +599,25 @@ The presentation layer is implemented through modular view rendering files using
 * **`jobPostingView.js`:**
   * Generates the complete HTML interface for the `/job-postings` and `/job-postings/:id` endpoints.
   * Powers the interactive **Job Posting Management** screen with full CRUD support:
-    * **Create**: "Yeni İş İlanı Yayınla" form with User ID (optional foreign key), Title, Company, Location, Description, and Contact Email inputs (`POST /job-postings`).
-    * **Read (List)**: Structured table with `ID`, `Başlık`, `Şirket`, `Kullanıcı ID`, `Konum`, `İletişim`, `Tarih`, and `İşlemler` columns.
+    * **Create**: Job creation form with title "➕ Yeni İş İlanı Ekle", submitted via the "İş İlanı Yayınla" button (`POST /job-postings`). Includes input fields for User ID ("Kullanıcı ID"), Title ("İş / Pozisyon Başlığı"), Company ("Şirket / Kurum Adı"), Location ("Konum / Çalışma Modeli"), Contact Email ("İletişim / Başvuru E-posta"), and Description ("İş Tanımı ve Aranan Nitelikler").
+    * **Read (List)**: Structured table with `ID`, `Başlık` (Title), `Şirket` (Company), `Kullanıcı ID` (User ID), `Konum` (Location), `İletişim` (Contact), `Tarih` (Date), and `İşlemler` (Actions) columns, including action buttons "Detay", "Başvurular", "Düzenle", and "Sil".
     * **Read (Details)**: Dedicated detail page (`GET /job-postings/:id`) presenting full position info, linked user owner (`user_id`), timestamps, and prominent action buttons:
-      * **📋 Bu İlanın Başvurularını Gör**: Direct link to the nested applications page (`/job-postings/:id/applications`).
-      * **✍️ Bu İlana Başvur**: Direct link jumping straight to the application form (`/job-postings/:id/applications#apply`).
-    * **Update (Edit)**: In-page editing functionality (`editJob(job)`) that populates the form including `user_id`, shifts to "İş İlanını Düzenle (#id)", and dispatches `PUT /job-postings/:id` requests.
-    * **Delete**: Delete button triggering confirmed `DELETE /job-postings/:id` requests to remove the job posting.
+      * **"📋 Bu İlanın Başvurularını Gör"**: Direct link to the nested applications page (`/job-postings/:id/applications`).
+      * **"✍️ Bu İlana Başvur"**: Direct link jumping straight to the application form (`/job-postings/:id/applications#apply`).
+      * **"← Tüm İlanlara Dön"**: Navigation link returning to the job postings list.
+      * **"Bu İlanı Sil"**: Confirmation button triggering confirmed deletion (`DELETE /job-postings/:id`).
+    * **Update (Edit)**: In-page editing functionality (`editJob(job)`) that populates the form including `user_id`, updates the submit button label to "Güncellemeyi Kaydet (PUT)", and dispatches `PUT /job-postings/:id` requests.
+    * **Delete**: Delete buttons ("Sil" in table row, "Bu İlanı Sil" on detail page) triggering confirmed `DELETE /job-postings/:id` requests to remove the job posting.
   * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
 * **`applicationView.js`:**
   * Generates the complete HTML interface for the `/applications`, `/applications/:id`, and nested `/job-postings/:jobPostingId/applications` endpoints.
   * Powers the interactive **Application Management** screen:
-    * **Read (Global List)**: Comprehensive table of all applications across all jobs with `ID`, `İlan`, `Başvuran`, `E-posta`, `Durum`, `Başvuru Tarihi`, and `İşlemler` columns. Status badges are color-coded (`PENDING`, `REVIEWING`, `ACCEPTED`, `REJECTED`).
-    * **Read (Nested List)**: Filtered view for a specific job posting (`/job-postings/:jobPostingId/applications`) featuring parent job summary banner, "← Tüm Başvurulara Dön" link, and job detail navigation.
-    * **Create**: Application submission form (anchored at `#apply`). In nested views, the `job_posting_id` is automatically locked/pre-filled for the current job posting; in global view, it accepts job posting ID input along with applicant name, email, user ID (optional), resume URL, and cover letter (`POST /applications` or `POST /job-postings/:jobPostingId/applications`).
-    * **Read (Details)**: Dedicated detail page (`GET /applications/:id`) displaying candidate profile, cover letter, resume link, linked job summary, and direct link to job posting.
-    * **Status Update (Edit)**: Interactive status change dropdown allowing administrators to select a new status and dispatch `PATCH /applications/:id` with `{"status": newStatus}` and `Content-Type: application/json`.
-    * **Delete**: Delete button triggering confirmed `DELETE /applications/:id` requests.
+    * **Read (Global List)**: Comprehensive table of all applications across all jobs with `ID`, `İlan ID` (Job ID), `Başvuran` (Applicant), `E-posta` (Email), `Durum` (Status), `Özgeçmiş` (Resume), `Tarih` (Date), and `İşlemler` (Actions) columns, with row action button "Detay & Yönet". Status badges are color-coded (`PENDING`, `REVIEWING`, `ACCEPTED`, `REJECTED`).
+    * **Read (Nested List)**: Filtered view for a specific job posting (`/job-postings/:jobPostingId/applications`) featuring parent job summary banner, navigation link "← İlan Detayına Dön" (Back to Job Details), "✍️ Bu İlana Başvur" jump button, and dedicated list of applications for that job posting.
+    * **Create**: Application submission form (anchored at `#apply` with heading "➕ Yeni Başvuru Gönder"), dispatched via `POST /applications` (global) or `POST /job-postings/:jobPostingId/applications` (nested). In nested views, the target job posting ID (`job_posting_id`) is automatically locked and pre-filled as a hidden field; in global view, it accepts `Hedef İş İlanı ID` input along with applicant name ("Başvuran Ad Soyad"), email ("E-posta Adresi"), user ID ("Kullanıcı ID"), resume URL ("Özgeçmiş (CV) URL"), and cover letter ("Ön Yazı / Notlar").
+    * **Read (Details)**: Dedicated detail page (`GET /applications/:id`) displaying candidate profile, cover letter, resume link, linked job summary, and navigation buttons ("← Tüm Başvurular", "💼 İlgili İlan (#id)", and "📋 Bu İlanın Tüm Başvuruları").
+    * **Status Update (Edit)**: Status change control section ("⚙️ Başvuru Durumunu Güncelle (PATCH)") with four status options (`PENDING` "Beklemede", `REVIEWING` "İnceleniyor", `ACCEPTED` "Kabul Edildi", `REJECTED` "Reddedildi"), saved via the "Durumu Kaydet" button to dispatch `PATCH /applications/:id` with `{"status": newStatus}` and `Content-Type: application/json`.
+    * **Delete**: Delete button ("🗑️ Başvuruyu Sil") triggering confirmed `DELETE /applications/:id` requests.
   * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
 
 ---
