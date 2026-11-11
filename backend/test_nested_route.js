@@ -234,7 +234,86 @@ async function runTests() {
     assert.strictEqual(resHealth.body.status, 'ok');
     console.log('✅ Existing endpoints (/api/users, /api/users/:id, /api/job-postings, /api/health) verified intact!');
 
-    console.log('\n🎉 ALL NESTED ROUTE TESTS PASSED SUCCESSFULLY! 🎉\n');
+    // 14. Test Task 2 Rule: Title with exactly 120 characters is accepted
+    console.log('\n--- Test 14: Title with exactly 120 characters is accepted (201 Created) ---');
+    const title120 = 'A'.repeat(120);
+    const resTitle120 = await request('/api/job-postings', 'POST', {
+      title: title120,
+      company: 'Task2 Test Corp',
+      description: 'Test description for 120 chars'
+    });
+    console.log(`Status: ${resTitle120.status}, Title length: ${resTitle120.body && resTitle120.body.title ? resTitle120.body.title.length : 'N/A'}`);
+    assert.strictEqual(resTitle120.status, 201, '120 character title should return 201 Created');
+    assert.strictEqual(resTitle120.body.title.length, 120, 'Saved title length should be 120');
+    createdJobIds.push(resTitle120.body.id);
+    console.log('✅ Title with exactly 120 characters accepted successfully');
+
+    // 15. Test Task 2 Rule: Title with 121 characters is rejected with 400 Bad Request
+    console.log('\n--- Test 15: Title with 121 characters is rejected on /api/job-postings (400 Bad Request) ---');
+    const title121 = 'A'.repeat(121);
+    const resTitle121 = await request('/api/job-postings', 'POST', {
+      title: title121,
+      company: 'Task2 Test Corp',
+      description: 'Test description for 121 chars'
+    });
+    console.log(`Status: ${resTitle121.status}, Response:`, resTitle121.body);
+    assert.strictEqual(resTitle121.status, 400, '121 character title must return 400 Bad Request');
+    assert(resTitle121.body.message.includes('120'), 'Error message must mention 120 character limit');
+    console.log('✅ Title with 121 characters rejected with 400 Bad Request');
+
+    // 16. Test Task 2 Rule: Title with 121 characters is rejected on nested route /api/users/:id/jobs
+    console.log(`\n--- Test 16: Title with 121 characters is rejected on nested route /api/users/${testUser.id}/jobs ---`);
+    const resNestedTitle121 = await request(`/api/users/${testUser.id}/jobs`, 'POST', {
+      title: title121,
+      company: 'Task2 Test Corp',
+      description: 'Test description for 121 chars on nested route'
+    });
+    console.log(`Status: ${resNestedTitle121.status}, Response:`, resNestedTitle121.body);
+    assert.strictEqual(resNestedTitle121.status, 400, 'Nested route must reject 121 character title with 400 Bad Request');
+    assert(resNestedTitle121.body.message.includes('120'), 'Error message must mention 120 character limit');
+    console.log('✅ Nested route properly rejects 121 character title with 400 Bad Request');
+
+    // 17. Test Task 2 Rule: Description is optional (omitted description -> 201 Created, description is null)
+    console.log('\n--- Test 17: Description is optional (create job without description) ---');
+    const resNoDesc = await request('/api/job-postings', 'POST', {
+      title: 'TEST_JOB No Description Provided',
+      company: 'Optional Desc Corp'
+    });
+    console.log(`Status: ${resNoDesc.status}, Description:`, resNoDesc.body ? resNoDesc.body.description : 'N/A');
+    assert.strictEqual(resNoDesc.status, 201, 'Job without description must be created with 201');
+    assert.strictEqual(resNoDesc.body.description, null, 'Omitted description should be null');
+    createdJobIds.push(resNoDesc.body.id);
+    console.log('✅ Job created without description successfully (description is null)');
+
+    // 18. Test Task 2 Rule: City parameter is supported and returned as both city and location
+    console.log('\n--- Test 18: City field input is saved and returned as both city and location ---');
+    const resCity = await request('/api/job-postings', 'POST', {
+      title: 'TEST_JOB City Support',
+      company: 'Izmir Tech Hub',
+      city: 'Izmir'
+    });
+    console.log(`Status: ${resCity.status}, City: ${resCity.body ? resCity.body.city : 'N/A'}, Location: ${resCity.body ? resCity.body.location : 'N/A'}`);
+    assert.strictEqual(resCity.status, 201, 'Job with city should be created with 201');
+    assert.strictEqual(resCity.body.city, 'Izmir', 'Returned city must be Izmir');
+    assert.strictEqual(resCity.body.location, 'Izmir', 'Returned location alias must also be Izmir');
+    createdJobIds.push(resCity.body.id);
+    console.log('✅ City parameter properly saved and returned in response');
+
+    // 19. Test Task 2 Rule: Legacy location parameter is supported and returned as both location and city
+    console.log('\n--- Test 19: Legacy location field input is saved and returned as both location and city ---');
+    const resLegacyLoc = await request('/api/job-postings', 'POST', {
+      title: 'TEST_JOB Legacy Location Support',
+      company: 'Bursa Auto Corp',
+      location: 'Bursa / Hybrid'
+    });
+    console.log(`Status: ${resLegacyLoc.status}, Location: ${resLegacyLoc.body ? resLegacyLoc.body.location : 'N/A'}, City: ${resLegacyLoc.body ? resLegacyLoc.body.city : 'N/A'}`);
+    assert.strictEqual(resLegacyLoc.status, 201, 'Job with location should be created with 201');
+    assert.strictEqual(resLegacyLoc.body.location, 'Bursa / Hybrid', 'Returned location must be Bursa / Hybrid');
+    assert.strictEqual(resLegacyLoc.body.city, 'Bursa / Hybrid', 'Returned city alias must also be Bursa / Hybrid');
+    createdJobIds.push(resLegacyLoc.body.id);
+    console.log('✅ Legacy location parameter backward compatibility verified');
+
+    console.log('\n🎉 ALL TESTS (NESTED ROUTES & TASK 2 RULES) PASSED SUCCESSFULLY! 🎉\n');
   } finally {
     // Yalnızca bu test çalıştırmasında oluşturulan test iş ilanlarını temizle
     if (createdJobIds.length > 0) {

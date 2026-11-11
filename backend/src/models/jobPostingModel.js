@@ -9,14 +9,16 @@ const jobPostings = [];
 const formatJobPosting = (row) => {
   if (!row) return null;
   const createdAtIso = row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString();
+  const locationValue = row.location !== undefined ? row.location : null;
   return {
     id: row.id,
     user_id: row.user_id !== undefined ? row.user_id : null,
     userId: row.user_id !== undefined ? row.user_id : null,
     title: row.title,
     company: row.company,
-    location: row.location !== undefined ? row.location : null,
-    description: row.description,
+    location: locationValue,
+    city: locationValue,
+    description: row.description !== undefined ? row.description : null,
     contact_email: row.contact_email !== undefined ? row.contact_email : null,
     createdAt: createdAtIso,
     createdDate: createdAtIso,
@@ -68,9 +70,17 @@ const createJobPosting = async (jobPostingData = {}) => {
     : null;
 
   const title = data.title !== undefined ? String(data.title) : '';
+  if (title && title.length > 120) {
+    const err = new Error("İş ilanı başlığı en fazla 120 karakter olabilir.");
+    err.code = 'TITLE_TOO_LONG';
+    throw err;
+  }
   const company = data.company !== undefined ? String(data.company) : '';
-  const location = data.location !== undefined && data.location !== null ? String(data.location) : null;
-  const description = data.description !== undefined ? String(data.description) : '';
+  const rawLocation = data.city !== undefined ? data.city : data.location;
+  const location = rawLocation !== undefined && rawLocation !== null ? String(rawLocation) : null;
+  const description = data.description !== undefined && data.description !== null && String(data.description).trim() !== ''
+    ? String(data.description)
+    : null;
   const contactEmail = data.contact_email !== undefined && data.contact_email !== null
     ? String(data.contact_email)
     : (data.contactEmail !== undefined && data.contactEmail !== null ? String(data.contactEmail) : null);
@@ -117,8 +127,13 @@ const updateJobPosting = async (id, jobPostingData = {}, isPartial = false) => {
     }
     if (data.title !== undefined) updatedTitle = String(data.title);
     if (data.company !== undefined) updatedCompany = String(data.company);
-    if (data.location !== undefined) updatedLocation = data.location !== null ? String(data.location) : null;
-    if (data.description !== undefined) updatedDescription = String(data.description);
+    if (data.city !== undefined || data.location !== undefined) {
+      const rawLoc = data.city !== undefined ? data.city : data.location;
+      updatedLocation = rawLoc !== null ? String(rawLoc) : null;
+    }
+    if (data.description !== undefined) {
+      updatedDescription = (data.description !== null && String(data.description).trim() !== '') ? String(data.description) : null;
+    }
     if (data.contact_email !== undefined) {
       updatedContactEmail = data.contact_email !== null ? String(data.contact_email) : null;
     } else if (data.contactEmail !== undefined) {
@@ -133,11 +148,20 @@ const updateJobPosting = async (id, jobPostingData = {}, isPartial = false) => {
     }
     updatedTitle = data.title !== undefined ? String(data.title) : '';
     updatedCompany = data.company !== undefined ? String(data.company) : '';
-    updatedLocation = data.location !== undefined && data.location !== null ? String(data.location) : null;
-    updatedDescription = data.description !== undefined ? String(data.description) : '';
+    const rawLoc = data.city !== undefined ? data.city : data.location;
+    updatedLocation = rawLoc !== undefined && rawLoc !== null ? String(rawLoc) : null;
+    updatedDescription = (data.description !== undefined && data.description !== null && String(data.description).trim() !== '')
+      ? String(data.description)
+      : null;
     updatedContactEmail = data.contact_email !== undefined && data.contact_email !== null
       ? String(data.contact_email)
       : (data.contactEmail !== undefined && data.contactEmail !== null ? String(data.contactEmail) : null);
+  }
+
+  if (updatedTitle && updatedTitle.length > 120) {
+    const err = new Error("İş ilanı başlığı en fazla 120 karakter olabilir.");
+    err.code = 'TITLE_TOO_LONG';
+    throw err;
   }
 
   const pool = await getPool();

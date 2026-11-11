@@ -614,6 +614,7 @@ const swaggerDocument = {
                     user_id: 1,
                     title: "Full Stack Developer",
                     company: "Tech Alumni Corp",
+                    city: "Istanbul",
                     location: "Istanbul / Hybrid",
                     description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
                     contact_email: "esra.sahin@alumni.edu.tr",
@@ -654,13 +655,14 @@ const swaggerDocument = {
               schema: {
                 type: "object",
                 properties: {
-                  title: { type: "string", example: "Full Stack Developer" },
+                  title: { type: "string", maxLength: 120, example: "Full Stack Developer" },
                   company: { type: "string", example: "Tech Alumni Corp" },
+                  city: { type: "string", example: "Istanbul" },
                   location: { type: "string", example: "Istanbul / Hybrid" },
                   description: { type: "string", example: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks." },
                   contact_email: { type: "string", example: "careers@techalumni.com" }
                 },
-                required: ["title", "company", "description"]
+                required: ["title", "company"]
               }
             }
           }
@@ -676,6 +678,7 @@ const swaggerDocument = {
                   userId: 1,
                   title: "Full Stack Developer",
                   company: "Tech Alumni Corp",
+                  city: "Istanbul",
                   location: "Istanbul / Hybrid",
                   description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
                   contact_email: "careers@techalumni.com",
@@ -686,10 +689,10 @@ const swaggerDocument = {
             }
           },
           "400": {
-            description: "Zorunlu alanlar eksik",
+            description: "Zorunlu alanlar eksik veya geçersiz",
             content: {
               "application/json": {
-                example: { message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur." }
+                example: { message: "Başlık (title) ve şirket (company) alanları zorunludur." }
               }
             }
           },
@@ -1182,6 +1185,7 @@ const swaggerDocument = {
                     id: 1,
                     title: "Full Stack Developer",
                     company: "Tech Alumni Corp",
+                    city: "Istanbul",
                     location: "Istanbul / Hybrid",
                     description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
                     contact_email: "careers@techalumni.com",
@@ -1205,13 +1209,14 @@ const swaggerDocument = {
               schema: {
                 type: "object",
                 properties: {
-                  title: { type: "string", example: "Full Stack Developer" },
+                  title: { type: "string", maxLength: 120, example: "Full Stack Developer" },
                   company: { type: "string", example: "Tech Alumni Corp" },
+                  city: { type: "string", example: "Istanbul" },
                   location: { type: "string", example: "Istanbul / Hybrid" },
                   description: { type: "string", example: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks." },
                   contact_email: { type: "string", example: "careers@techalumni.com" }
                 },
-                required: ["title", "company", "description"]
+                required: ["title", "company"]
               }
             }
           }
@@ -1225,6 +1230,7 @@ const swaggerDocument = {
                   id: 1,
                   title: "Full Stack Developer",
                   company: "Tech Alumni Corp",
+                  city: "Istanbul",
                   location: "Istanbul / Hybrid",
                   description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
                   contact_email: "careers@techalumni.com",
@@ -1238,7 +1244,7 @@ const swaggerDocument = {
             description: "Eksik veya geçersiz alanlar",
             content: {
               "application/json": {
-                example: { message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur." }
+                example: { message: "Başlık (title) ve şirket (company) alanları zorunludur." }
               }
             }
           }
@@ -1268,6 +1274,7 @@ const swaggerDocument = {
                   id: 1,
                   title: "Full Stack Developer",
                   company: "Tech Alumni Corp",
+                  city: "Istanbul",
                   location: "Istanbul / Hybrid",
                   description: "Looking for a Full Stack Developer experienced with Node.js and modern web frameworks.",
                   contact_email: "careers@techalumni.com",
@@ -1315,13 +1322,14 @@ const swaggerDocument = {
               schema: {
                 type: "object",
                 properties: {
-                  title: { type: "string", example: "Senior Backend Developer" },
+                  title: { type: "string", maxLength: 120, example: "Senior Backend Developer" },
                   company: { type: "string", example: "Tech Alumni Corp" },
+                  city: { type: "string", example: "Remote" },
                   location: { type: "string", example: "Remote" },
                   description: { type: "string", example: "Looking for a Senior Backend Developer with Node.js/MySQL experience." },
                   contact_email: { type: "string", example: "careers@techalumni.com" }
                 },
-                required: ["title", "company", "description"]
+                required: ["title", "company"]
               }
             }
           }
@@ -1348,7 +1356,7 @@ const swaggerDocument = {
             description: "Geçersiz veya eksik iş ilanı ID'si veya eksik alanlar",
             content: {
               "application/json": {
-                example: { message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur." }
+                example: { message: "Başlık (title) ve şirket (company) alanları zorunludur." }
               }
             }
           },
@@ -1382,8 +1390,9 @@ const swaggerDocument = {
               schema: {
                 type: "object",
                 properties: {
-                  title: { type: "string", example: "Lead Backend Developer" },
+                  title: { type: "string", maxLength: 120, example: "Lead Backend Developer" },
                   company: { type: "string", example: "Tech Alumni Corp" },
+                  city: { type: "string", example: "Ankara" },
                   location: { type: "string", example: "Ankara / Remote" },
                   description: { type: "string", example: "Updated description..." },
                   contact_email: { type: "string", example: "jobs@techalumni.com" }

@@ -218,15 +218,15 @@ const renderJobPostingsPage = (jobPostings = []) => {
           <input type="number" id="user_id" name="user_id" placeholder="Örn: 1 (Kayıtlı kullanıcı ID'si)" min="1" />
         </div>
         <div class="form-group">
-          <label for="title">İş / Pozisyon Başlığı *</label>
-          <input type="text" id="title" name="title" required placeholder="Örn: Full Stack Developer" />
+          <label for="title">İş / Pozisyon Başlığı * (En fazla 120 karakter)</label>
+          <input type="text" id="title" name="title" required maxlength="120" placeholder="Örn: Full Stack Developer" />
         </div>
         <div class="form-group">
           <label for="company">Şirket / Kurum Adı *</label>
           <input type="text" id="company" name="company" required placeholder="Örn: Tech Alumni Corp" />
         </div>
         <div class="form-group">
-          <label for="location">Konum / Çalışma Modeli (Opsiyonel)</label>
+          <label for="location">Şehir / Konum (Opsiyonel)</label>
           <input type="text" id="location" name="location" placeholder="Örn: İstanbul / Hibrit veya Uzaktan" />
         </div>
         <div class="form-group">
@@ -234,8 +234,8 @@ const renderJobPostingsPage = (jobPostings = []) => {
           <input type="email" id="contact_email" name="contact_email" placeholder="Örn: kariyer@techalumni.com" />
         </div>
         <div class="form-group">
-          <label for="description">İş Tanımı ve Aranan Nitelikler *</label>
-          <textarea id="description" name="description" rows="5" required placeholder="Pozisyon sorumlulukları, yetkinlikler ve başvuru bilgileri..."></textarea>
+          <label for="description">İş Tanımı ve Aranan Nitelikler (Opsiyonel)</label>
+          <textarea id="description" name="description" rows="5" placeholder="Pozisyon sorumlulukları, yetkinlikler ve başvuru bilgileri..."></textarea>
         </div>
         <button type="submit" id="submitBtn" class="btn">İş İlanı Yayınla</button>
         <button type="button" id="cancelBtn" class="btn btn-secondary" style="display:none;" onclick="resetForm()">İptal</button>
@@ -335,12 +335,12 @@ const renderJobPostingDetailPage = (job) => {
       <h2>${escapeHtml(job.title)}</h2>
       <p><strong>Şirket:</strong> <span class="badge" style="background:#e2e8f0; color:#2d3748;">${escapeHtml(job.company)}</span></p>
       <p><strong>İlan Sahibi (Kullanıcı):</strong> ${job.user_id ? `<a href="/users/${escapeHtml(job.user_id)}" style="color: #2b6cb0; font-weight: 600;">#${escapeHtml(job.user_id)}</a>` : 'Belirtilmedi'}</p>
-      <p><strong>Konum:</strong> ${escapeHtml(job.location || 'Belirtilmedi')}</p>
+      <p><strong>Konum / Şehir:</strong> ${escapeHtml(job.city || job.location || 'Belirtilmedi')}</p>
       <p><strong>İletişim:</strong> ${job.contact_email ? `<a href="mailto:${escapeHtml(job.contact_email)}">${escapeHtml(job.contact_email)}</a>` : 'Belirtilmedi'}</p>
       <p><strong>Yayın Tarihi:</strong> <span class="text-muted">${escapeHtml(job.createdDate || job.createdAt || job.created_at || '-')}</span></p>
       <hr style="border:none; border-top:1px solid #e2e8f0; margin:16px 0;" />
       <h3>Açıklama ve Nitelikler</h3>
-      <div style="white-space: pre-wrap; line-height: 1.6; color: #4a5568;">${escapeHtml(job.description)}</div>
+      <div style="white-space: pre-wrap; line-height: 1.6; color: #4a5568;">${escapeHtml(job.description || 'Açıklama belirtilmedi.')}</div>
     </div>
 
     <div class="card" style="background: #edf2f7; border-color: #cbd5e0; margin-top: 20px;">

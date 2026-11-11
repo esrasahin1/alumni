@@ -107,6 +107,25 @@ const getJobPosting = async (req, res) => {
 const createJobPosting = async (req, res) => {
   try {
     const body = req && req.body;
+    const title = body && body.title !== undefined ? String(body.title).trim() : '';
+    const company = body && body.company !== undefined ? String(body.company).trim() : '';
+
+    if (!title || !company) {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: "Başlık (title) ve şirket (company) alanları zorunludur." });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Başlık ve şirket alanları zorunludur.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+    }
+
+    if (title.length > 120) {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: "İş ilanı başlığı en fazla 120 karakter olabilir." });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: İş ilanı başlığı en fazla 120 karakter olabilir.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+    }
+
     const newJobPosting = await jobPostingModel.createJobPosting(body);
 
     if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
@@ -129,6 +148,13 @@ const createJobPosting = async (req, res) => {
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Belirtilen kullanıcı (user_id) sistemde kayıtlı değil.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+    }
+    if (error && error.code === 'TITLE_TOO_LONG') {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: error.message });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: ${error.message}</h1><a href="/job-postings">Geri Dön</a></body></html>`);
     }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
@@ -154,6 +180,26 @@ const updateJobPosting = async (req, res) => {
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Geçersiz ID</title></head><body><h1>Geçersiz veya eksik iş ilanı ID'si</h1></body></html>`);
+    }
+
+    const body = req && req.body;
+    const title = body && body.title !== undefined ? String(body.title).trim() : '';
+    const company = body && body.company !== undefined ? String(body.company).trim() : '';
+
+    if (!title || !company) {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: "Başlık (title) ve şirket (company) alanları zorunludur." });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Başlık ve şirket alanları zorunludur.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+    }
+
+    if (title.length > 120) {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: "İş ilanı başlığı en fazla 120 karakter olabilir." });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: İş ilanı başlığı en fazla 120 karakter olabilir.</h1><a href="/job-postings">Geri Dön</a></body></html>');
     }
 
     const updatedJobPosting = await jobPostingModel.updateJobPosting(id, req && req.body);
@@ -193,6 +239,13 @@ const updateJobPosting = async (req, res) => {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Belirtilen kullanıcı (user_id) sistemde kayıtlı değil.</h1><a href="/job-postings">Geri Dön</a></body></html>');
     }
+    if (error && error.code === 'TITLE_TOO_LONG') {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: error.message });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: ${error.message}</h1><a href="/job-postings">Geri Dön</a></body></html>`);
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };
@@ -217,6 +270,25 @@ const patchJobPosting = async (req, res) => {
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Geçersiz ID</title></head><body><h1>Geçersiz veya eksik iş ilanı ID'si</h1></body></html>`);
+    }
+
+    const body = req && req.body;
+    if (body && body.title !== undefined) {
+      const title = String(body.title).trim();
+      if (!title) {
+        if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+          return res.status(400).json({ message: "Başlık (title) boş olamaz." });
+        }
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Başlık boş olamaz.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+      }
+      if (title.length > 120) {
+        if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+          return res.status(400).json({ message: "İş ilanı başlığı en fazla 120 karakter olabilir." });
+        }
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: İş ilanı başlığı en fazla 120 karakter olabilir.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+      }
     }
 
     const updatedJobPosting = await jobPostingModel.patchJobPosting(id, req && req.body);
@@ -255,6 +327,13 @@ const patchJobPosting = async (req, res) => {
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Belirtilen kullanıcı (user_id) sistemde kayıtlı değil.</h1><a href="/job-postings">Geri Dön</a></body></html>');
+    }
+    if (error && error.code === 'TITLE_TOO_LONG') {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(400).json({ message: error.message });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: ${error.message}</h1><a href="/job-postings">Geri Dön</a></body></html>`);
     }
     res.status(500).send('Internal Server Error: ' + error.message);
   }

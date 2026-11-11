@@ -165,11 +165,16 @@ const createUserJob = async (req, res) => {
     const body = req && req.body;
     const title = body && body.title !== undefined ? String(body.title).trim() : '';
     const company = body && body.company !== undefined ? String(body.company).trim() : '';
-    const description = body && body.description !== undefined ? String(body.description).trim() : '';
 
-    if (!title || !company || !description) {
+    if (!title || !company) {
       return res.status(400).json({
-        message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur."
+        message: "Başlık (title) ve şirket (company) alanları zorunludur."
+      });
+    }
+
+    if (title.length > 120) {
+      return res.status(400).json({
+        message: "İş ilanı başlığı en fazla 120 karakter olabilir."
       });
     }
 
@@ -183,6 +188,9 @@ const createUserJob = async (req, res) => {
     const newJobPosting = await jobPostingModel.createJobPosting(jobPayload);
     return res.status(201).json(newJobPosting);
   } catch (error) {
+    if (error && error.code === 'TITLE_TOO_LONG') {
+      return res.status(400).json({ message: error.message });
+    }
     return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };

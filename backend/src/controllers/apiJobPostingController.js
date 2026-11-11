@@ -50,11 +50,16 @@ const createJobPosting = async (req, res) => {
     const body = req && req.body;
     const title = body && body.title !== undefined ? String(body.title).trim() : '';
     const company = body && body.company !== undefined ? String(body.company).trim() : '';
-    const description = body && body.description !== undefined ? String(body.description).trim() : '';
 
-    if (!title || !company || !description) {
+    if (!title || !company) {
       return res.status(400).json({
-        message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur."
+        message: "Başlık (title) ve şirket (company) alanları zorunludur."
+      });
+    }
+
+    if (title.length > 120) {
+      return res.status(400).json({
+        message: "İş ilanı başlığı en fazla 120 karakter olabilir."
       });
     }
 
@@ -63,6 +68,9 @@ const createJobPosting = async (req, res) => {
   } catch (error) {
     if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
       return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
+    }
+    if (error && error.code === 'TITLE_TOO_LONG') {
+      return res.status(400).json({ message: error.message });
     }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
@@ -83,11 +91,16 @@ const updateJobPosting = async (req, res) => {
     const body = req && req.body;
     const title = body && body.title !== undefined ? String(body.title).trim() : '';
     const company = body && body.company !== undefined ? String(body.company).trim() : '';
-    const description = body && body.description !== undefined ? String(body.description).trim() : '';
 
-    if (!title || !company || !description) {
+    if (!title || !company) {
       return res.status(400).json({
-        message: "Başlık (title), şirket (company) ve açıklama (description) alanları zorunludur."
+        message: "Başlık (title) ve şirket (company) alanları zorunludur."
+      });
+    }
+
+    if (title.length > 120) {
+      return res.status(400).json({
+        message: "İş ilanı başlığı en fazla 120 karakter olabilir."
       });
     }
 
@@ -101,6 +114,9 @@ const updateJobPosting = async (req, res) => {
   } catch (error) {
     if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
       return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
+    }
+    if (error && error.code === 'TITLE_TOO_LONG') {
+      return res.status(400).json({ message: error.message });
     }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
@@ -118,6 +134,17 @@ const patchJobPosting = async (req, res) => {
       return res.status(400).json({ message: "Geçersiz veya eksik iş ilanı ID'si" });
     }
 
+    const body = req && req.body;
+    if (body && body.title !== undefined) {
+      const title = String(body.title).trim();
+      if (!title) {
+        return res.status(400).json({ message: "Başlık (title) boş olamaz." });
+      }
+      if (title.length > 120) {
+        return res.status(400).json({ message: "İş ilanı başlığı en fazla 120 karakter olabilir." });
+      }
+    }
+
     const updatedJobPosting = await jobPostingModel.patchJobPosting(id, req && req.body);
 
     if (!updatedJobPosting) {
@@ -128,6 +155,9 @@ const patchJobPosting = async (req, res) => {
   } catch (error) {
     if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
       return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
+    }
+    if (error && error.code === 'TITLE_TOO_LONG') {
+      return res.status(400).json({ message: error.message });
     }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
