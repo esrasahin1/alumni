@@ -12,10 +12,14 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const apiApplicationRoutes = require('./routes/apiApplicationRoutes');
 const applicationController = require('./controllers/applicationController');
 const apiApplicationController = require('./controllers/apiApplicationController');
+const loggerMiddleware = require('./middlewares/loggerMiddleware');
+const notFoundMiddleware = require('./middlewares/notFoundMiddleware');
+const errorHandlerMiddleware = require('./middlewares/errorHandlerMiddleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(loggerMiddleware);
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -1919,6 +1923,12 @@ app.get('/api/swagger/doc.json', (req, res) => {
 
 // Swagger UI arayüzü (/api/swagger üzerinden görsel ve test edilebilir arayüz sunar)
 app.use('/api/swagger', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// 404 Guardian Middleware (Tanımsız rotaları yakalayan son katman)
+app.use(notFoundMiddleware);
+
+// 5xx Guardian Middleware (Merkezi hata yakalama katmanı)
+app.use(errorHandlerMiddleware);
 
 app.listen(PORT, () => {
   console.log(`Sunucu ${PORT} portunda çalışıyor: http://localhost:${PORT}`);

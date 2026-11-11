@@ -16,7 +16,7 @@ The system aims to strengthen communication between alumni and students, streaml
 * **Database & Persistence:** MySQL 8.0, `mysql2` (`mysql2/promise` Connection Pool), Docker Named Volume (logical name in `docker-compose.yml`: `mysql_data`, physical name created based on the project name: `alumni_mysql_data`)
 * **Migration & Seeder:** Node.js-based Migration Runner (`backend/src/database/migrate.js`) and Idempotent Seeder (`backend/src/database/seed.js`)
 * **Containerization:** Docker, Docker Compose (Multi-container: `db` + `backend`)
-* **Middleware:** CORS, Express JSON Parser, Express URL-Encoded Parser
+* **Middleware & Error Handling:** Custom Request Logger (`loggerMiddleware`), 404 Guardian (`notFoundMiddleware`), Centralized 5xx Guardian (`errorHandlerMiddleware`), Shared File Logger (`errorLogger`), CORS, Express JSON & URL-Encoded Parsers
 
 ---
 
@@ -152,6 +152,7 @@ Once the server is running, you can access the following web interfaces directly
 | **All Applications** | [http://localhost:3000/applications](http://localhost:3000/applications) | Overview list of all candidate job applications in the system, job posting links, resume links, and application submission form ("➕ Yeni Başvuru Gönder"). |
 | **Application Details & Management** | [http://localhost:3000/applications/:id](http://localhost:3000/applications/1) | Application details, cover letter, resume link, status update control ("⚙️ Başvuru Durumunu Güncelle (PATCH)" with options `PENDING`, `REVIEWING`, `ACCEPTED`, `REJECTED` and "Durumu Kaydet" button), and delete button ("🗑️ Başvuruyu Sil"). |
 | **Swagger UI (REST API)** | [http://localhost:3000/api/swagger](http://localhost:3000/api/swagger) | Interactive interface to inspect and test all backend REST API endpoints live. |
+| **Generic 404 Page** | [http://localhost:3000/*](http://localhost:3000/any-invalid-url) | Branded error interface rendered for invalid or unmatched web URLs. Features automatic 5-second client-side redirection to home (`/`), manual "Ana Sayfaya Dön" button, and portal navigation. |
 
 ---
 
@@ -255,6 +256,8 @@ All API endpoints of the project are documented with an interactive Swagger UI i
 ```text
 alumni/
 ├── backend/
+│   ├── logs/                 # Persistent error logs directory
+│   │   └── error.logs        # Unified error and 404 audit log file (Task 6)
 │   ├── src/
 │   │   ├── config/           # Database connection pool (db.js)
 │   │   ├── controllers/      # Request controllers and business logic
@@ -264,10 +267,21 @@ alumni/
 │   │   │   ├── seeds/        # Idempotent sample data seeders (users, announcements, job_postings)
 │   │   │   ├── migrate.js    # Migration CLI runner
 │   │   │   └── seed.js       # Seed CLI runner
+│   │   ├── middlewares/      # Custom Express middleware pipeline (Tasks 3–6)
+│   │   │   ├── errorHandlerMiddleware.js # Centralized 5xx/4xx error handler (Task 5)
+│   │   │   ├── errorLogger.js            # Shared file logging utility (Task 6)
+│   │   │   ├── loggerMiddleware.js       # Terminal HTTP request logger (Task 3)
+│   │   │   └── notFoundMiddleware.js     # Unmatched route 404 guardian (Task 4, 6, 7)
 │   │   ├── models/           # MySQL 8.0 data models and asynchronous CRUD queries
 │   │   ├── routes/           # API and web route definitions
 │   │   ├── views/            # HTML UI and page templates
-│   │   └── app.js            # Express server, middleware, and Swagger configuration
+│   │   │   ├── announcementView.js
+│   │   │   ├── apiUserView.js
+│   │   │   ├── applicationView.js
+│   │   │   ├── jobPostingView.js
+│   │   │   ├── notFoundView.js           # Generic 404 page with 5s auto-redirect (Task 7)
+│   │   │   └── userView.js
+│   │   └── app.js            # Express server, middleware pipeline, and Swagger configuration
 │   ├── test_nested_route.js  # Nested API route test suite (GET & POST /api/users/:id/jobs)
 │   ├── .dockerignore         # Docker build ignore rules
 │   ├── Dockerfile            # Backend Docker container configuration
@@ -328,6 +342,11 @@ backend/src/
 │   │   └── userSeeder.js
 │   ├── migrate.js
 │   └── seed.js
+├── middlewares/
+│   ├── errorHandlerMiddleware.js # Centralized 5xx/4xx error handler (Task 5)
+│   ├── errorLogger.js            # Resilient file logger for error.logs (Task 6)
+│   ├── loggerMiddleware.js       # High-precision terminal request logger (Task 3)
+│   └── notFoundMiddleware.js     # Unmatched route 404 guardian (Task 4, 6, 7)
 ├── models/
 │   ├── announcementModel.js
 │   ├── applicationModel.js
@@ -348,6 +367,7 @@ backend/src/
 │   ├── apiUserView.js
 │   ├── applicationView.js
 │   ├── jobPostingView.js
+│   ├── notFoundView.js           # Generic 404 view with 5s auto-redirect (Task 7)
 │   └── userView.js
 └── app.js
 ```
@@ -356,10 +376,11 @@ backend/src/
 * **`config/`**: Centralized MySQL connection pool configuration (`backend/src/config/db.js`) supporting environment variables, dynamic host resolution (`db` within Docker network or `localhost` on host), auto-reconnect, and health check validation.
 * **`database/`**: Database lifecycle and schema management containing forward/rollback SQL migration scripts, realistic factory mock generators, and idempotent seed scripts.
 * **`controllers/`**: Receives incoming requests from the route layer, executes business logic, coordinates with asynchronous models using `await`, handles validation and error reporting, and returns formatted HTML views or JSON responses.
+* **`middlewares/`**: Intercepts the HTTP request-response cycle to execute cross-cutting concerns: terminal logging with timing (`loggerMiddleware.js`), route guarding for unmapped paths (`notFoundMiddleware.js`), centralized error handling with safe responses (`errorHandlerMiddleware.js`), and non-blocking file persistence (`errorLogger.js`).
 * **`models/`**: Manages the data persistence layer, encapsulating asynchronous MySQL 8.0 queries via parameterized statements (`?`), returning structured records and promises to controllers.
 * **`routes/`**: Defines HTTP route definitions (verbs and path patterns) and maps incoming requests to their respective controller handler functions.
-* **`views/`**: Renders dynamic, accessible, and sanitized HTML templates for browser presentation using native JavaScript template literals.
-* **`app.js`**: Serves as the central server entry point; configures global middleware (CORS, body parsers), mounts the route modules, sets up OpenAPI/Swagger UI documentation, and starts the HTTP listener.
+* **`views/`**: Renders dynamic, accessible, and sanitized HTML templates for browser presentation using native JavaScript template literals, including entity interfaces and generic 404 error handling.
+* **`app.js`**: Serves as the central server entry point; configures global middleware (CORS, body parsers, custom logger), mounts the route modules, sets up OpenAPI/Swagger UI documentation, registers terminal guardians (404 and error handler), and starts the HTTP listener.
 
 ---
 
@@ -409,6 +430,17 @@ backend/src/
   * **`deleteAnnouncement(id)`**: Removes the announcement record (`DELETE FROM announcements WHERE id = ?`) and returns a boolean success status (`true`/`false`).
 
 #### Job Posting Model (`models/jobPostingModel.js`):
+* **Task 2 JobPosting Business Rules:**
+  1. `title` is required.
+  2. `title` maximum length is 120 characters.
+  3. `company` is required.
+  4. `city` is optional.
+  5. `description` is optional.
+* **Current Implementation Differences & Technical Notes:**
+  * **Title Column Length:** The database schema defines `title VARCHAR(255) NOT NULL`, allocating up to 255 characters rather than enforcing a 120-character database limit.
+  * **Description Requirement:** The active database schema (`003_create_job_postings_table.sql`) defines `description TEXT NOT NULL` and the controller (`jobPostingController.js`) currently requires a description (returning `400 Bad Request` if missing), rather than treating it as optional.
+  * **City vs. Location Column Name:** The database schema, models, and migrations use the column name `location` (`location VARCHAR(255) NULL`) rather than `city`.
+  *(Note: These implementation differences remain active in the existing codebase and have not been modified).*
 * **MySQL Database Persistence:**
   Job posting data is persistently stored in the `job_postings` table of the MySQL 8.0 relational database (`alumni_db`) using the connection pool via `mysql2/promise` (`backend/src/config/db.js`).
 * **Table Schema & Attributes:**
@@ -631,6 +663,11 @@ The presentation layer is implemented through modular view rendering files using
     * **Status Update (Edit)**: Status change control section ("⚙️ Başvuru Durumunu Güncelle (PATCH)") with four status options (`PENDING` "Beklemede", `REVIEWING` "İnceleniyor", `ACCEPTED` "Kabul Edildi", `REJECTED` "Reddedildi"), saved via the "Durumu Kaydet" button to dispatch `PATCH /applications/:id` with `{"status": newStatus}` and `Content-Type: application/json`.
     * **Delete**: Delete button ("🗑️ Başvuruyu Sil") triggering confirmed `DELETE /applications/:id` requests.
   * Employs an internal `escapeHtml` function to sanitize user input against Cross-Site Scripting (XSS).
+* **`notFoundView.js`:**
+  * Generates the branded, responsive generic 404 HTML interface for unmatched web routes caught by `notFoundMiddleware`.
+  * Renders the corporate navigation bar, a large `404` status hero, a `404 Not Found` badge, and an XSS-sanitized representation of the requested HTTP method and URL path via `escapeHtml`.
+  * Implements a 5-second automatic client-side redirection to the home page (`/`) using `<meta http-equiv="refresh" content="5;url=/">` and a supporting JavaScript `setTimeout` fallback.
+  * Features a clear notice explaining the countdown (*"⏱️ 5 saniye içinde otomatik olarak ana sayfaya yönlendirileceksiniz."*) alongside manual navigation buttons ("🏠 Ana Sayfaya Dön", "💼 İş İlanları", and "👥 Mezunlar ve Kullanıcılar").
 
 ---
 
@@ -823,11 +860,217 @@ apiApplicationController.js (Request Parsing, Status Check & Validation)
 * **Modular MVC Structure:** The application fully follows a modular, decoupled MVC architecture across all four domains: Users, Announcements, Job Postings, and Applications. Model, View, Controller, and Route responsibilities are cleanly isolated into dedicated files and directories.
 * **Separation of Concerns in `app.js`:** CRUD and data management logic no longer reside inside `app.js`. `app.js` serves strictly as the application entry point responsible for:
   * Initializing the Express instance.
-  * Registering global middleware (`cors`, `express.json`, `express.urlencoded`).
+  * Registering the pre-routing request timing logger (`loggerMiddleware`).
+  * Registering global body parsing and CORS middleware (`cors`, `express.json`, `express.urlencoded`).
   * Mounting direct route modules (`app.use('/users', userRoutes)`, `app.use('/api/users', apiUserRoutes)`, `app.use('/announcements', announcementRoutes)`, `app.use('/api/announcements', apiAnnouncementRoutes)`, `app.use('/job-postings', jobPostingRoutes)`, `app.use('/api/job-postings', apiJobPostingRoutes)`, `app.use('/applications', applicationRoutes)`, `app.use('/api/applications', apiApplicationRoutes)`, `app.use('/alumni', alumniRoutes)`).
   * Registering nested application routes directly (`/job-postings/:jobPostingId/applications` and `/api/job-postings/:jobPostingId/applications`), while nested user job routes (`/api/users/:id/jobs` and `/users/:id/jobs`) are cleanly encapsulated within their respective router modules (`apiUserRoutes` and `userRoutes`).
   * Configuring OpenAPI 3.0 specifications and serving Swagger UI (`/api/swagger`).
+  * Registering the terminal route guardian (`notFoundMiddleware`) and centralized error handler (`errorHandlerMiddleware`).
   * Starting the HTTP server on the configured port.
 * **Database Persistence Achieved:** The transition from temporary in-memory arrays to persistent MySQL 8.0 relational database storage is complete for all four tables (`users`, `announcements`, `job_postings`, `applications`). All models query MySQL via parameterized prepared statements (`?`), all controller handlers asynchronously coordinate operations using `await`, and data persists across Docker container and server restarts via the persistent named volume `mysql_data` (defined under `volumes:` in `docker-compose.yml` as `mysql_data`, which Docker Compose automatically provisions on the host using the project prefix as `alumni_mysql_data`).
 * **Containerization & Reproducibility:** The complete stack is Dockerized via `docker-compose.yml` and `backend/Dockerfile`. The backend container waits for MySQL healthiness before booting, guaranteeing robust and reproducible deployments across development and production environments.
+
+---
+
+## 🛡️ Middleware Pipeline & Error Handling Architecture (Tasks 3–7)
+
+The application implements a robust, multi-stage Express middleware architecture designed to ensure total observability, graceful fault tolerance, secure error containment, and seamless user recovery across both REST API endpoints and server-rendered HTML views.
+
+### 1. Middleware Pipeline & Execution Order
+
+All middleware components are registered in [`backend/src/app.js`](backend/src/app.js) in a strict, deterministic sequence:
+
+```text
+Incoming HTTP Request
+       │
+       ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ 1. Logger Middleware (loggerMiddleware.js - Task 3)                    │
+│    • Records high-precision start timestamp (Date.now())               │
+│    • Listens to res.on('finish') to measure elapsed duration in ms     │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ 2. Core Security & Parsing Middleware                                  │
+│    • cors() (Cross-Origin Resource Sharing)                            │
+│    • express.json() & express.urlencoded() (Payload parsers)           │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+                                   ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ 3. Application Routes & Documentation                                  │
+│    • Web MVC Routes (/users, /announcements, /job-postings, etc.)      │
+│    • REST API Routes (/api/users, /api/job-postings, /api/health)      │
+│    • Interactive Swagger UI (/api/swagger, /api/swagger/doc.json)     │
+└──────────────────────────────────┬─────────────────────────────────────┘
+                                   │
+               ┌───────────────────┴───────────────────┐
+               │ (Route matched & handled)             │ (No route matched)
+               ▼                                       ▼
+       [Response Sent]              ┌────────────────────────────────────┐
+                                    │ 4. 404 Guardian Middleware         │
+                                    │    (notFoundMiddleware.js - T4/T7) │
+                                    │    • Appends 404 to error.logs     │
+                                    │    • /api: JSON 404 + reason       │
+                                    │    • Web: Generic 404 View + 5s    │
+                                    │      automatic client redirect     │
+                                    └────────────────────────────────────┘
+                                                       │
+                                 ┌─────────────────────┘
+                                 │ (Synchronous error or next(err))
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│ 5. 5xx Guardian Middleware (errorHandlerMiddleware.js - Task 5)        │
+│    • Express 4-parameter error signature: (err, req, res, next)        │
+│    • Logs technical details & stack trace to terminal (console.error)  │
+│    • Appends structured error & stack trace to logs/error.logs (Task 6)│
+│    • Preserves valid HTTP status codes (e.g. 400 Bad Request)          │
+│    • Returns safe, sanitized generic responses (no internal leakage)   │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 2. Task 3: Logger Middleware (`loggerMiddleware.js`)
+
+* **Source File:** [`backend/src/middlewares/loggerMiddleware.js`](backend/src/middlewares/loggerMiddleware.js)
+* **Registration:** Mounted as the very first middleware in `backend/src/app.js` (`app.use(loggerMiddleware)`).
+* **Behavior:**
+  * Intercepts every incoming HTTP request before routing takes place.
+  * Captures the initial request start time using `Date.now()`.
+  * Registers a completion listener on `res.on('finish')` to calculate the exact round-trip duration in milliseconds.
+  * Formats the current time as `HH:mm:ss` using local zero-padded time components.
+  * Extracts the HTTP method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`), request URL (`req.originalUrl || req.url`), and final response HTTP status code (`res.statusCode`).
+* **Terminal Output Format:**
+  ```text
+  HH:mm:ss METHOD URL STATUS DURATION ms
+  ```
+* **Live Verified Output Examples:**
+  ```text
+  22:56:13 GET /api/health 200 6 ms
+  22:56:13 GET /api/unknown-404-test 404 3 ms
+  22:56:13 POST /api/users 400 12 ms
+  22:59:30 POST /api/users/2/jobs 201 18 ms
+  ```
+
+---
+
+### 3. Task 4: 404 Guardian Middleware (`notFoundMiddleware.js`)
+
+* **Source File:** [`backend/src/middlewares/notFoundMiddleware.js`](backend/src/middlewares/notFoundMiddleware.js)
+* **Registration:** Mounted immediately after all web routes, API routes, and Swagger endpoints, acting as the terminal boundary for unmatched paths.
+* **Dual-Mode Response Protocol:**
+  * **REST API Endpoints (`/api/...` or `Accept: application/json`):**
+    Returns HTTP status **`404 Not Found`** with a structured, developer-friendly JSON payload stating the exact unmatched method and URL:
+    ```json
+    {
+      "success": false,
+      "message": "Route not found",
+      "reason": "No route matches GET /api/unknown-endpoint."
+    }
+    ```
+  * **Web Browser Endpoints (HTML requests):**
+    Delegates to the presentation layer (`renderNotFoundPage` in [`notFoundView.js`](backend/src/views/notFoundView.js)) to render a branded, accessible HTML error page.
+* **Audit Logging:** Every unmatched route request is automatically forwarded to [`errorLogger.js`](backend/src/middlewares/errorLogger.js) and appended to `backend/logs/error.logs` prior to sending the response.
+
+---
+
+### 4. Task 5: 5xx Guardian Middleware (`errorHandlerMiddleware.js`)
+
+* **Source File:** [`backend/src/middlewares/errorHandlerMiddleware.js`](backend/src/middlewares/errorHandlerMiddleware.js)
+* **Registration:** Mounted as the final handler in `backend/src/app.js` with the standard Express 4-parameter error signature: `(err, req, res, next)`.
+* **Centralized Error Scope:**
+  * Intercepts synchronous runtime exceptions thrown in middleware or route handlers.
+  * Intercepts syntax and parsing errors triggered during body decoding (e.g., malformed JSON payloads in POST/PUT requests).
+  * Intercepts asynchronous errors explicitly forwarded down the middleware chain via `next(err)`.
+  * *(Note: In Express 4, unhandled promise rejections inside asynchronous route handlers must be caught via `try/catch` and passed to `next(err)` to reach centralized error handlers).*
+* **Security & Information Leakage Prevention:**
+  * **Terminal Logging:** Full technical error details, messages, and stack traces are logged to the server terminal via `console.error(err)` for operator debugging.
+  * **Client Sanitization:** Technical error messages (`err.message`), database queries, and stack traces are **strictly stripped** from client responses to eliminate sensitive system leakage.
+  * **Status Code Preservation:** Preserves valid HTTP status codes attached to the error object (e.g. `400 Bad Request` from body-parser, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`, `409 Conflict`). Defaults unexpected internal errors to **`500 Internal Server Error`**.
+* **Client Response Formats:**
+  * **API JSON Response:**
+    ```json
+    {
+      "success": false,
+      "message": "Bad Request"
+    }
+    ```
+    *(or `"Internal Server Error"` for 5xx failures)*.
+  * **Web HTML Response:** Renders a clean, user-facing error document presenting safe headings and descriptions without stack traces.
+* **Streaming Safety:** Verifies `if (res.headersSent) return next(err);` before attempting to write headers, delegating to default Express streaming handlers if output has already commenced.
+
+---
+
+### 5. Task 6: Resilient Error Logging (`errorLogger.js` & `logs/error.logs`)
+
+* **Source File:** [`backend/src/middlewares/errorLogger.js`](backend/src/middlewares/errorLogger.js)
+* **Log Destination:** [`backend/logs/error.logs`](backend/logs/error.logs)
+* **Design Principles:**
+  * **Zero External Dependencies:** Built entirely with Node.js standard `fs` and `path` modules.
+  * **Dynamic Directory Resolution:** Resolves the log directory path dynamically relative to the middleware module using `path.resolve(__dirname, '../../logs')`.
+  * **Self-Healing Provisioning:** Checks if the target `logs/` directory exists on each write; if missing, creates it recursively (`fs.mkdirSync(LOGS_DIR, { recursive: true })`).
+  * **Append-Only Persistence:** Uses `fs.appendFile` to append every error entry to the log file without overwriting historical records.
+  * **Fault Tolerance:** All file operations are wrapped in `try/catch` and safe async callbacks. File system I/O errors are reported to `console.error` and **never crash** the Express runtime or abort client responses.
+  * **Deduplication & Selective Audit:** Successful requests (`200 OK`, `201 Created`, etc.) are never logged to `error.logs`. Unmatched routes log exactly once via `logNotFoundToFile`, and centralized errors log exactly once via `logErrorToFile`.
+* **Standardized Log Entry Formats:**
+  * **404 Unmatched Route Entry:**
+    ```text
+    [2026-11-11T20:15:50.970Z] GET /unknown-web-page 404 - Route not found
+    ```
+  * **Centralized Error Entry (with stack trace):**
+    ```text
+    [2026-11-11T19:58:55.304Z] POST /api/users - Error: Expected property name or '}' in JSON at position 2
+    Stack: SyntaxError: Expected property name or '}' in JSON at position 2
+        at JSON.parse (<anonymous>)
+        at parse (/app/node_modules/body-parser/lib/types/json.js:96:19)
+        at /app/node_modules/body-parser/lib/read.js:128:18
+        ...
+    ```
+
+---
+
+### 6. Task 7: Generic 404 Page & Automatic Redirection (`notFoundView.js`)
+
+* **Source File:** [`backend/src/views/notFoundView.js`](backend/src/views/notFoundView.js)
+* **Visual & Layout Features:**
+  * Fully styled with the application's portal CSS design system, navigation bar (`🏠 Ana Sayfa`, `👥 Kullanıcılar`, `📢 Duyurular`, `💼 İş İlanları`, `📝 Başvurular`, `⚡ Swagger API`), responsive container, and footer.
+  * Prominent `404` status code hero with a `<span class="badge badge-danger">404 Not Found</span>` badge.
+  * Clear, user-friendly description: *"Aradığınız sayfa silinmiş, adı değiştirilmiş veya geçici olarak kullanılamıyor olabilir."*
+  * Contextual requested route card safely displaying the requested HTTP method and sanitized URL via `escapeHtml(url)` to prevent XSS attacks.
+* **5-Second Client-Side Automatic Redirection:**
+  * Employs standard W3C meta refresh in `<head>`:
+    ```html
+    <meta http-equiv="refresh" content="5;url=/">
+    ```
+  * Provides an explanatory banner informing the user:
+    ```html
+    <div class="redirect-notice">
+      ⏱️ 5 saniye içinde otomatik olarak ana sayfaya yönlendirileceksiniz.
+    </div>
+    ```
+  * Includes a JavaScript fallback timer (`setTimeout(() => window.location.href = '/', 5000)`).
+  * Retains manual call-to-action buttons for immediate navigation:
+    * `<a href="/" class="btn">🏠 Ana Sayfaya Dön</a>`
+    * `<a href="/job-postings" class="btn btn-secondary">💼 İş İlanları</a>`
+    * `<a href="/users" class="btn btn-secondary">👥 Mezunlar ve Kullanıcılar</a>`
+* **Architectural Invariants:**
+  * **HTTP Wire Status:** Returns HTTP status **`404 Not Found`** directly (avoiding 302 redirect loops and preserving accurate HTTP semantics for monitoring tools and search engines).
+  * **API Isolation:** API consumers requesting `/api/*` or sending `Accept: application/json` continue receiving pure JSON responses without any HTML or redirection.
+
+---
+
+### 7. Verification Guide & Test Commands
+
+The middleware pipeline can be validated across all five functional areas using the verification scenarios below:
+
+| Test Scenario | Command | Expected Output & Behavior |
+| :--- | :--- | :--- |
+| **1. Logger Timing & Format** | `curl -i http://localhost:3000/api/health` | HTTP `200 OK`. Terminal outputs `HH:mm:ss GET /api/health 200 X ms`. Does **not** write to `error.logs`. |
+| **2. API 404 JSON Response** | `curl -i http://localhost:3000/api/unknown-route` | HTTP `404 Not Found`. Body: `{"success":false,"message":"Route not found","reason":"No route matches GET /api/unknown-route."}`. Appends entry to `backend/logs/error.logs`. |
+| **3. Web 404 HTML & Meta Refresh** | `curl -i -H "Accept: text/html" http://localhost:3000/unknown-page` | HTTP `404 Not Found`. HTML contains `<meta http-equiv="refresh" content="5;url=/">`, 5s notice, and manual return button. Appends entry to `error.logs`. |
+| **4. Centralized Error Sanitization** | `curl -i -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d "{ malformed_json"` | HTTP `400 Bad Request`. Body: `{"success":false,"message":"Bad Request"}` (no stack trace leaked). Full stack trace written to terminal and `error.logs`. |
+| **5. Log File Persistence** | Inspect `backend/logs/error.logs` | File contains timestamped `404` and `Error:` entries with full stack traces. |
+| **6. Nested Route Regression Test Suite** | `npm test` *(from `backend/` directory)* | Executes `test_nested_route.js`. Verifies all **13/13 scenarios pass cleanly** with all middleware active. |
 

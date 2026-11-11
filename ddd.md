@@ -133,16 +133,25 @@ The `Job Posting` entity represents career opportunities, job listings, and inte
 * **Storage Engine:** InnoDB (`utf8mb4_unicode_ci`)
 * **Primary Key:** `id` (`INT UNSIGNED AUTO_INCREMENT`)
 
+#### Business Rules
+
+JobPosting:
+1. title is required.
+2. title must have a maximum length of 120 characters.
+3. company is required.
+4. city is optional.
+5. description is optional.
+
 #### Job Posting Field Specifications
 
 | Field Name | MySQL Column Type | Constraints | Description & Behavior |
 | :--- | :--- | :--- | :--- |
 | `id` | `INT UNSIGNED` | `PRIMARY KEY AUTO_INCREMENT` | Unique numeric identifier for the job posting. Auto-incremented by MySQL. |
-| `user_id` | `INT UNSIGNED` | `NULL`, `FOREIGN KEY REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE` | Optional foreign key referencing the user who published the job posting (`users(id)`). Set to `NULL` for legacy or unassigned postings. |
-| `title` | `VARCHAR(255)` | `NOT NULL` | Headline or position title of the job opening (e.g., "Full Stack Developer"). |
-| `company` | `VARCHAR(255)` | `NOT NULL` | Hiring organization or company name. |
-| `location` | `VARCHAR(255)` | `NULL` | Work location or arrangement (e.g., "Istanbul / Hybrid", "Remote"). Optional. |
-| `description` | `TEXT` | `NOT NULL` | Full role description, responsibilities, qualifications, and application instructions. |
+| `user_id` | `INT UNSIGNED` | `NULL`, `FOREIGN KEY REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE` | Optional foreign key referencing the user who published the job posting (`users(id)`). Set to `NULL` for legacy or unassigned postings. Enforced when creating via nested route `POST /api/users/:id/jobs`. |
+| `title` | `VARCHAR(255)` | `NOT NULL` | Headline or position title of the job opening. Business Rule: **required**, maximum length is **120 characters** (current database schema allocates `VARCHAR(255)`). |
+| `company` | `VARCHAR(255)` | `NOT NULL` | Hiring organization or company name. Business Rule: **required**. |
+| `location` (`city`) | `VARCHAR(255)` | `NULL` | Work location or city. Business Rule: **city is optional**. Persisted in the database schema under the column name `location`. |
+| `description` | `TEXT` | `NULL` *(Current DB: `NOT NULL`)* | Full role description, responsibilities, and qualifications. Business Rule: **description is optional**. *(Implementation note: Migration `003_create_job_postings_table.sql` and controller validation currently require `description TEXT NOT NULL`).* |
 | `contact_email` | `VARCHAR(255)` | `NULL` | Contact or inquiry email address for the position. Optional. |
 | `created_at` | `TIMESTAMP` | `DEFAULT CURRENT_TIMESTAMP` | Record creation timestamp automatically stamped by MySQL. |
 | `updated_at` | `TIMESTAMP` | `DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Last modification timestamp automatically updated on changes. |
@@ -152,12 +161,14 @@ The `Job Posting` entity represents career opportunities, job listings, and inte
 * **Verified Project Conventions (Design Decisions):**
   * `id`: Uses `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`, matching `users`, `announcements`, and `migrations`.
   * `created_at` / `updated_at`: Matches the identical MySQL timestamp defaults and automatic update triggers used across `users` and `announcements`.
-  * `title` & `description`: Follows the standard column type conventions used in `announcements` (`VARCHAR(255)` for short title, `TEXT` for multiline content).
   * Storage Engine: Standardized on InnoDB (`utf8mb4_unicode_ci`) matching existing database migrations.
-* **Domain Assumptions (Distinguished from Existing Code):**
-  * `company`: Directly embedded as a `VARCHAR(255) NOT NULL` string because no standalone `companies` table exists in the project.
+  * `user_id` Foreign Key: Added via migration `005_add_user_id_to_job_postings.sql` as a nullable foreign key (`INT UNSIGNED DEFAULT NULL`) referencing `users(id)` (`ON DELETE SET NULL ON UPDATE CASCADE`), allowing legacy postings with `NULL` user_id while linking new postings to creators.
+* **Business Rules vs. Current Implementation Notes:**
+  * `title`: Business rule requires maximum length of 120 characters; the database allocates `VARCHAR(255)` without an explicit 120-character database limit.
+  * `company`: Business rule requires company; enforced as `VARCHAR(255) NOT NULL`.
+  * `city`: Business rule specifies city is optional; the active database column is named `location` (`VARCHAR(255) NULL`).
+  * `description`: Business rule specifies description is optional; the active database schema (`003_create_job_postings_table.sql`) and controller currently require it (`TEXT NOT NULL`).
   * `location` & `contact_email`: Defined as nullable (`NULL`) so postings without fixed physical locations or relying on external application channels remain valid without constraint violations.
-  * **Absence of `user_id` Foreign Key:** The existing application code possesses no user authentication, session state, or user roles (`role`) in `users`. Adding a foreign key would be an unverified assumption without explicit project support; the entity is therefore designed as an independent table consistent with `announcements`.
 
 #### Job Posting Object Example (Runtime JSON)
 ```json
