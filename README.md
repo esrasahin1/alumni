@@ -115,7 +115,7 @@ Open a separate terminal, navigate into the **`backend/` directory**, and run:
 cd backend
 npm test
 ```
-*(This command runs the `test_nested_route.js` test suite configured in `backend/package.json`, automatically verifying 13 scenarios against the running server).*
+*(This command runs the `test_nested_route.js` test suite configured in `backend/package.json`, automatically verifying all 19 scenarios—including 13 nested route/CRUD tests and 6 Task 2 business rule tests—against the running server).*
 
 ---
 
@@ -263,7 +263,7 @@ alumni/
 │   │   ├── controllers/      # Request controllers and business logic
 │   │   ├── database/         # Migrations, seeders, and factories
 │   │   │   ├── factories/    # Mock data generators (userFactory, announcementFactory, jobPostingFactory)
-│   │   │   ├── migrations/   # SQL/JS schema migration files (users, announcements, job_postings, applications, user_id FK)
+│   │   │   ├── migrations/   # SQL/JS schema migration files (users, announcements, job_postings, applications, user_id FK, Task 2 rules)
 │   │   │   ├── seeds/        # Idempotent sample data seeders (users, announcements, job_postings)
 │   │   │   ├── migrate.js    # Migration CLI runner
 │   │   │   └── seed.js       # Seed CLI runner
@@ -282,7 +282,7 @@ alumni/
 │   │   │   ├── notFoundView.js           # Generic 404 page with 5s auto-redirect (Task 7)
 │   │   │   └── userView.js
 │   │   └── app.js            # Express server, middleware pipeline, and Swagger configuration
-│   ├── test_nested_route.js  # Nested API route test suite (GET & POST /api/users/:id/jobs)
+│   ├── test_nested_route.js  # Automated test suite (19 scenarios: nested API routes & Task 2 business rules)
 │   ├── .dockerignore         # Docker build ignore rules
 │   ├── Dockerfile            # Backend Docker container configuration
 │   ├── package.json          # Project dependencies and scripts
@@ -335,7 +335,9 @@ backend/src/
 │   │   ├── 004_create_applications_table.js
 │   │   ├── 004_create_applications_table.sql
 │   │   ├── 005_add_user_id_to_job_postings.js
-│   │   └── 005_add_user_id_to_job_postings.sql
+│   │   ├── 005_add_user_id_to_job_postings.sql
+│   │   ├── 006_update_job_postings_task2_rules.js
+│   │   └── 006_update_job_postings_task2_rules.sql
 │   ├── seeds/
 │   │   ├── announcementSeeder.js
 │   │   ├── jobPostingSeeder.js
@@ -430,26 +432,21 @@ backend/src/
   * **`deleteAnnouncement(id)`**: Removes the announcement record (`DELETE FROM announcements WHERE id = ?`) and returns a boolean success status (`true`/`false`).
 
 #### Job Posting Model (`models/jobPostingModel.js`):
-* **Task 2 JobPosting Business Rules:**
-  1. `title` is required.
-  2. `title` maximum length is 120 characters.
-  3. `company` is required.
-  4. `city` is optional.
-  5. `description` is optional.
-* **Current Implementation Differences & Technical Notes:**
-  * **Title Column Length:** The database schema defines `title VARCHAR(255) NOT NULL`, allocating up to 255 characters rather than enforcing a 120-character database limit.
-  * **Description Requirement:** The active database schema (`003_create_job_postings_table.sql`) defines `description TEXT NOT NULL` and the controller (`jobPostingController.js`) currently requires a description (returning `400 Bad Request` if missing), rather than treating it as optional.
-  * **City vs. Location Column Name:** The database schema, models, and migrations use the column name `location` (`location VARCHAR(255) NULL`) rather than `city`.
-  *(Note: These implementation differences remain active in the existing codebase and have not been modified).*
+* **Task 2 JobPosting Business Rules & Implementation:**
+  All five core business rules defined in `ddd.md` are fully implemented and aligned across the database schema, models, controllers, and views via Migration `006_update_job_postings_task2_rules`:
+  1. **`title` is required & maximum 120 characters:** Enforced in the database schema as `title VARCHAR(120) NOT NULL` (via Migration 006) and validated at model and controller levels (`jobPostingModel.js`, `jobPostingController.js`, `apiJobPostingController.js`, `apiUserController.js`). Missing titles return HTTP `400 Bad Request`, and titles exceeding 120 characters are rejected with HTTP `400 Bad Request` (`TITLE_TOO_LONG`).
+  2. **`company` is required:** Enforced in the database schema as `company VARCHAR(255) NOT NULL` and validated across all web and REST API controllers (returns HTTP `400 Bad Request` if omitted).
+  3. **`city` is optional:** Stored in the database column `location VARCHAR(255) NULL`. Full dual-field interoperability is supported: input payloads accept either `city` or `location`, and formatted outputs return both `city` and `location` aliases.
+  4. **`description` is optional:** Updated in the database schema to `description TEXT NULL` (via Migration 006). Empty or omitted descriptions are normalized to `null` and successfully saved (`201 Created`) across all creation endpoints.
 * **MySQL Database Persistence:**
   Job posting data is persistently stored in the `job_postings` table of the MySQL 8.0 relational database (`alumni_db`) using the connection pool via `mysql2/promise` (`backend/src/config/db.js`).
-* **Table Schema & Attributes:**
+* **Table Schema & Attributes (Updated via Migration 006):**
   * `id`: `INT UNSIGNED AUTO_INCREMENT PRIMARY KEY`
   * `user_id`: `INT UNSIGNED NULL` (Foreign key referencing `users(id)` with `ON DELETE SET NULL ON UPDATE CASCADE`. Identifies the user who created the job posting; `NULL` for legacy or unassigned postings)
-  * `title`: `VARCHAR(255) NOT NULL`
-  * `company`: `VARCHAR(255) NOT NULL`
-  * `location`: `VARCHAR(255) NULL`
-  * `description`: `TEXT NOT NULL`
+  * `title`: `VARCHAR(120) NOT NULL` (Maximum 120 characters, updated via Migration 006)
+  * `company`: `VARCHAR(255) NOT NULL` (Mandatory company/organization name)
+  * `location`: `VARCHAR(255) NULL` (Optional position city/location, aliased to `city`)
+  * `description`: `TEXT NULL` (Optional position description, updated via Migration 006)
   * `contact_email`: `VARCHAR(255) NULL`
   * `created_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
   * `updated_at`: `TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`
@@ -643,7 +640,13 @@ The presentation layer is implemented through modular view rendering files using
 * **`jobPostingView.js`:**
   * Generates the complete HTML interface for the `/job-postings` and `/job-postings/:id` endpoints.
   * Powers the interactive **Job Posting Management** screen with full CRUD support:
-    * **Create**: Job creation form with title "➕ Yeni İş İlanı Ekle", submitted via the "İş İlanı Yayınla" button (`POST /job-postings`). Includes input fields for User ID ("Kullanıcı ID"), Title ("İş / Pozisyon Başlığı"), Company ("Şirket / Kurum Adı"), Location ("Konum / Çalışma Modeli"), Contact Email ("İletişim / Başvuru E-posta"), and Description ("İş Tanımı ve Aranan Nitelikler").
+    * **Create**: Job creation form with heading "➕ Yeni İş İlanı Ekle", submitted via the "İş İlanı Yayınla" button (`POST /job-postings`). Form input rules adhere strictly to Task 2 business rules:
+      * **Title ("İş / Pozisyon Başlığı * (En fazla 120 karakter)")**: Mandatory field, enforced with HTML `required` and `maxlength="120"`.
+      * **Company ("Şirket / Kurum Adı *")**: Mandatory field, enforced with HTML `required`.
+      * **City / Location ("Şehir / Konum (Opsiyonel)")**: Optional field for city or work model (hybrid/remote); maps to both `location` and `city`.
+      * **Contact Email ("İletişim / Başvuru E-posta (Opsiyonel)")**: Optional application email field.
+      * **Description ("İş Tanımı ve Aranan Nitelikler (Opsiyonel)")**: Optional multi-line textarea, can be submitted empty.
+      * **User ID ("Kullanıcı ID (İlan Sahibi - Opsiyonel)")**: Optional owner user ID linking the job to an existing registered user.
     * **Read (List)**: Structured table with `ID`, `Başlık` (Title), `Şirket` (Company), `Kullanıcı ID` (User ID), `Konum` (Location), `İletişim` (Contact), `Tarih` (Date), and `İşlemler` (Actions) columns, including action buttons "Detay", "Başvurular", "Düzenle", and "Sil".
     * **Read (Details)**: Dedicated detail page (`GET /job-postings/:id`) presenting full position info, linked user owner (`user_id`), timestamps, and prominent action buttons:
       * **"📋 Bu İlanın Başvurularını Gör"**: Direct link to the nested applications page (`/job-postings/:id/applications`).
@@ -1072,5 +1075,5 @@ The middleware pipeline can be validated across all five functional areas using 
 | **3. Web 404 HTML & Meta Refresh** | `curl -i -H "Accept: text/html" http://localhost:3000/unknown-page` | HTTP `404 Not Found`. HTML contains `<meta http-equiv="refresh" content="5;url=/">`, 5s notice, and manual return button. Appends entry to `error.logs`. |
 | **4. Centralized Error Sanitization** | `curl -i -X POST http://localhost:3000/api/users -H "Content-Type: application/json" -d "{ malformed_json"` | HTTP `400 Bad Request`. Body: `{"success":false,"message":"Bad Request"}` (no stack trace leaked). Full stack trace written to terminal and `error.logs`. |
 | **5. Log File Persistence** | Inspect `backend/logs/error.logs` | File contains timestamped `404` and `Error:` entries with full stack traces. |
-| **6. Nested Route Regression Test Suite** | `npm test` *(from `backend/` directory)* | Executes `test_nested_route.js`. Verifies all **13/13 scenarios pass cleanly** with all middleware active. |
+| **6. Automated Test Suite (Nested Routes & Task 2)** | `npm test` *(from `backend/` directory)* | Executes `test_nested_route.js`. Verifies all **19/19 scenarios pass cleanly** (13 nested route & CRUD scenarios + 6 Task 2 validation scenarios) with all middleware active. |
 
