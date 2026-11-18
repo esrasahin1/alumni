@@ -6,6 +6,8 @@ This project is a RESTful API application for an **Alumni Tracking System**, dev
 
 The system aims to strengthen communication between alumni and students, streamline career tracking, and foster institutional networking. The project architecture is built on Node.js and Express.js, designed with a modular and extensible structure.
 
+> 🎨 **Brand Identity & Visual Style Guide:** For comprehensive documentation on the Alumni Tracking System's brand identity, purpose, target audience, visual design language, Full Midnight palette (Midnight Navy, Secondary Navy, Electric Blue, Lime, Soft White), and typography, refer to [brand.md](brand.md). For enterprise UI specifications, design system tokens, component guidelines, spacing scale, and developer instructions, refer to [DESIGN.md](DESIGN.md).
+
 ---
 
 ## 🛠️ Technologies Used
