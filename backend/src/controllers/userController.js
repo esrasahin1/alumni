@@ -1,6 +1,7 @@
 const userModel = require('../models/userModel');
 const jobPostingModel = require('../models/jobPostingModel');
 const userView = require('../views/userView');
+const userJobsView = require('../views/userJobsView');
 
 /**
  * Controller: User işlemlerini ve iş mantığını yönetir (View Layer entegrasyonlu, MySQL destekli)
@@ -185,13 +186,23 @@ const deleteUser = async (req, res) => {
 };
 
 /**
- * GET /users/:id/jobs (Kullanıcının Oluşturduğu İş İlanları - Nested Route)
+ * GET /users/:id/jobs (Kullanıcının Oluşturduğu İş İlanları - Nested Route / HTML Web & JSON)
  */
 const getUserJobs = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
 
     if (!id || isNaN(Number(id))) {
+      if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      }
+      const html = userView.renderUserNotFoundPage(id);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(html);
+    }
+
+    const user = await userModel.getUserById(id);
+    if (!user) {
       if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
@@ -211,9 +222,20 @@ const getUserJobs = async (req, res) => {
       return res.status(404).send(html);
     }
 
-    return res.status(200).json(jobPostings);
+    // İstemci açıkça sadece JSON talep ederse (Accept: application/json AND NOT text/html)
+    if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      return res.status(200).json(jobPostings);
+    }
+
+    // Web tarayıcıları ve varsayılan: Full Midnight HTML sayfası
+    const html = userJobsView.renderUserJobsPage(user, jobPostings);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(html);
   } catch (error) {
-    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      return res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    }
+    res.status(500).send('Internal Server Error: ' + error.message);
   }
 };
 
