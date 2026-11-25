@@ -1115,3 +1115,135 @@ The middleware pipeline can be validated across all five functional areas using 
   * Offline unit checks (no DB mutation): `cd backend && npm run test:admin:unit`
   * Live MySQL/HTTP integration tests (after Migration `009` is applied): `cd backend && npm run test:admin` (if a single real admin already exists, pass `ADMIN_TEST_EMAIL=... ADMIN_TEST_PASSWORD=...`).
 
+---
+
+## 🔐 Authentication & Authorization
+
+### 1. Authentication Overview
+
+The application uses **server-side session authentication** powered by `express-session` and persistent MySQL session storage (`express-mysql-session`, backed by the `sessions` table created in Migration `008_create_sessions_table`).
+
+* Session handling ([`backend/src/config/session.js`](backend/src/config/session.js)) and request user hydration ([`backend/src/middlewares/authContextMiddleware.js`](backend/src/middlewares/authContextMiddleware.js)) are registered globally in [`backend/src/app.js`](backend/src/app.js) before application routes.
+* Only the minimal user identifier (`req.session.userId`) is stored in the session record. On each request, `attachCurrentUser` loads safe user metadata from MySQL into `req.user` and `res.locals.currentUser`.
+
+---
+
+### 2. Registration
+
+Defined in [`backend/src/routes/authRoutes.js`](backend/src/routes/authRoutes.js) and [`backend/src/controllers/authController.js`](backend/src/controllers/authController.js):
+
+* **Routes:** `GET /register` (renders the registration form) and `POST /register` (processes account creation).
+* **Supported Account Types:** Only **`student`** and **`alumni`** accounts can self-register (`ALLOWED_ROLES = ['student', 'alumni']`).
+* **Required Fields & Validation:**
+  * `name`: required, trimmed, max 255 characters.
+  * `email`: required, trimmed and normalized to lowercase, valid email format, max 255 characters.
+  * `password`: required, 8–128 characters.
+  * `confirm_password`: required, must match `password`.
+  * `role`: required, must be `student` or `alumni`.
+  * *Optional fields:* `department` (max 150 characters) and `graduation_year` (4-digit integer between `1950` and current year + 10).
+* **Password Hashing:** Passwords are hashed before storage using Node.js's built-in `crypto.scrypt` ([`backend/src/utils/passwordUtils.js`](backend/src/utils/passwordUtils.js)) with a unique 16-byte random salt and 64-byte derived key (`N=16384, r=8, p=1`), stored in the self-describing format `scrypt$N=16384,r=8,p=1$<salt_hex>$<hash_hex>`.
+* **Duplicate Email Handling:** Duplicate emails violate the `users.email` unique constraint (`ER_DUP_ENTRY`), returning HTTP `409 Conflict` and re-rendering the form with an error notice while preserving non-password input values.
+* **Admin Self-Registration Restrictions:** Submitting any `role` other than `student` or `alumni` (including `admin`) is rejected with HTTP `400 Bad Request`. Additionally, `userModel.createRegisteredUser` always assigns `auth_role = 'user'`. An administrator account can only be granted via the CLI promotion script (`npm run admin:promote -- <email>`).
+* **Post-Registration Flow:** Successful registration follows Post/Redirect/Get (`303 See Other` to `/register?registered=1`) without creating a session or auto-logging the user in.
+
+---
+
+### 3. Login & Logout
+
+Defined in [`backend/src/routes/authRoutes.js`](backend/src/routes/authRoutes.js) and [`backend/src/controllers/authController.js`](backend/src/controllers/authController.js):
+
+| Method | Route | Behavior |
+| :--- | :--- | :--- |
+| **`GET`** | `/login` | Renders the login page (shows banners for `?loggedOut=1` or `?authRequired=1`). |
+| **`POST`** | `/login` | Validates `email` and `password`, verifies the stored `scrypt` hash with `crypto.timingSafeEqual`, creates an authenticated session, and redirects (`303`) to `/`. |
+| **`POST`** | `/logout` | Destroys the active MySQL session, clears the session cookie, and redirects (`303`) to `/login?loggedOut=1`. |
+
+* **Generic Credential Errors:** Unknown emails, wrong passwords, and legacy accounts with `password_hash = NULL` all return HTTP `401 Unauthorized` with the generic message `"Invalid email or password."`.
+* **Session Behavior:** Sessions are persisted in MySQL (`sessions` table) using an `httpOnly`, `sameSite: 'lax'` cookie (`alumni.sid` by default, 24-hour default TTL, `secure` enabled in production or when `COOKIE_SECURE=true`), with `resave: false` and `saveUninitialized: false`.
+* **Session ID Regeneration on Login:** Upon valid login, `req.session.regenerate()` is called before assigning `req.session.userId = user.id` and calling `req.session.save()` to mitigate session fixation.
+* **Session Destruction on Logout:** `POST /logout` calls `req.session.destroy()` to delete the session from MySQL and `res.clearCookie()` using the shared cookie options.
+
+---
+
+### 4. Authorization Middleware & Request Handling
+
+* **`attachCurrentUser`** ([`backend/src/middlewares/authContextMiddleware.js`](backend/src/middlewares/authContextMiddleware.js)): Runs globally after `sessionMiddleware`. Sets `req.user` and `res.locals.currentUser` to `null` by default, or hydrates them via `userModel.getSessionUserById(req.session.userId)` (`id`, `name`, `email`, `role`, `auth_role`, `created_at`, `updated_at`). If the referenced user no longer exists, `req.session.userId` is cleared. Does not block unauthenticated requests.
+* **`requireAuth`** ([`backend/src/middlewares/requireAuthMiddleware.js`](backend/src/middlewares/requireAuthMiddleware.js)): Guards routes that require a logged-in user (`req.user && req.user.id`):
+  * **Browser / HTML requests:** Redirects unauthenticated users to `/login?authRequired=1`.
+  * **API (`/api/*`) or JSON (`Accept: application/json`) requests:** Responds with HTTP `401 Unauthorized` JSON (`{ "success": false, "message": "Unauthorized" }`).
+* **`requireAdmin`** ([`backend/src/middlewares/requireAdminMiddleware.js`](backend/src/middlewares/requireAdminMiddleware.js)): Requires an authenticated user with `req.user.auth_role === 'admin'`:
+  * Unauthenticated requests receive `401` JSON (API/JSON) or redirect to `/login?authRequired=1` (browser).
+  * Authenticated non-admin users receive HTTP `403 Forbidden` (JSON for API/JSON, styled 403 HTML page for browser).
+* **Resource Ownership Enforcement:** Controllers enforce consistent ownership rules across both MVC and API routes (e.g., users can only edit/delete their own job postings, view their own `/users/:id/jobs`, review applications only for their own job postings, view only their own `/my-applications`, and cannot change the status of their own applications or apply to their own job postings).
+
+---
+
+### 5. Roles (`users.role` vs. `users.auth_role`)
+
+The `users` table intentionally separates **account type** from **authorization privilege**:
+
+| Column | Allowed Values | Purpose |
+| :--- | :--- | :--- |
+| **`users.role`** | `'student'`, `'alumni'` *(nullable for legacy rows)* | **Account type / academic affiliation.** Used for profile metadata and UI navigation (such as showing the `My Job Postings` shortcut to alumni). |
+| **`users.auth_role`** | `'user'`, `'admin'` *(default `'user'`)* | **Authorization role.** Controls administrative access across middleware, controllers, and views. |
+
+> ⚠️ **Important Distinction:** `users.role` and `users.auth_role` are separate fields and must not be confused. All administrator checks in the codebase verify `req.user.auth_role === 'admin'`, never `users.role`.
+
+---
+
+### 6. Protected & Public Routes
+
+#### Public Routes (No Authentication Required)
+* **Portal & Health:** `GET /`, `GET /about`, `GET /health`, `GET /api/health`, `GET /alumni`, `GET /api/swagger`, `GET /api/swagger/doc.json`
+* **Auth Pages & Actions:** `GET /register`, `POST /register`, `GET /login`, `POST /login`, `POST /logout`
+* **Public Read-Only Content:** `GET /announcements`, `GET /announcements/:id`, `GET /api/announcements`, `GET /api/announcements/:id`, `GET /job-postings`, `GET /job-postings/:id`, `GET /api/job-postings`, `GET /api/job-postings/:id`
+* **Guest Job Applications (Supported):** `POST /applications`, `POST /job-postings/:jobPostingId/applications`, `POST /api/applications`, and `POST /api/job-postings/:jobPostingId/applications` remain publicly accessible so unauthenticated guests can apply (`user_id = NULL`, `status = 'PENDING'`). When an authenticated user applies, `user_id` is bound to `req.user.id` (client-supplied `user_id` and `status` are ignored), and job posting owners are blocked (`403`) from applying to their own listings.
+
+#### Authenticated Routes (`requireAuth` + Ownership / Role Rules)
+* **Personal Workspace:** `GET /profile`, `POST /profile` (scoped to `req.user.id`; only `name`, `department`, and `graduation_year` can be updated) and `GET /my-applications` (scoped strictly to `applications.user_id = req.user.id`).
+* **User Directory & Nested Jobs:** `/users`, `/users/:id`, `/users/:id/jobs` and `/api/users`, `/api/users/:id`, `/api/users/:id/jobs` (non-admins see public-safe directory fields for other users; `PUT`/`PATCH` allows self-whitelisted updates or Admin; `/:id/jobs` is strictly self or Admin).
+* **Job Posting Mutations:** `POST`, `PUT`, `PATCH`, `DELETE` on `/job-postings` and `/api/job-postings` (`PUT`, `PATCH`, `DELETE` require posting owner or Admin).
+* **Application Review & Management:** `GET`, `PUT`, `PATCH`, `DELETE` on `/applications` and `/api/applications`, plus `GET` on `/job-postings/:jobPostingId/applications` and `/api/job-postings/:jobPostingId/applications` (non-admin listing is scoped to applications on the user's own job postings; `GET /:id` requires applicant owner, job owner, or Admin; `PUT`/`PATCH` requires job owner or Admin; `DELETE` requires applicant owner or Admin).
+
+#### Admin-Only Routes (`requireAuth` + `requireAdmin`)
+* All `/admin/*` MVC routes and `/api/admin/*` REST API routes.
+* `POST`, `PUT`, `PATCH`, `DELETE` on `/announcements` and `/api/announcements`.
+* `POST` and `DELETE` on `/users` and `/api/users`.
+
+---
+
+### 7. Security Controls
+
+* **Password Hashing:** `crypto.scrypt` with per-password random 16-byte salt and constant-time verification (`crypto.timingSafeEqual`).
+* **Session Management:** Server-side MySQL session store, `httpOnly` + `sameSite: 'lax'` cookies, `SESSION_SECRET` required in `NODE_ENV=production`, session ID regeneration on login, and full session destruction + cookie clearing on logout.
+* **CSRF Protection (Current Scope):** Per-session synchronizer tokens verified with `crypto.timingSafeEqual` (via `_csrf` form field or `X-CSRF-Token` header) are enforced on:
+  * `/admin/*` MVC form `POST` routes ([`adminCsrfMiddleware.js`](backend/src/middlewares/adminCsrfMiddleware.js))
+  * `/profile` `POST` route ([`profileCsrfMiddleware.js`](backend/src/middlewares/profileCsrfMiddleware.js))
+  * `/users`, `/job-postings`, and `/announcements` MVC mutation routes (`POST`, `PUT`, `PATCH`, `DELETE` via [`mvcCsrfFactory.js`](backend/src/middlewares/mvcCsrfFactory.js))
+  * `/applications` and `/job-postings/:jobPostingId/applications` MVC mutations (`PUT`, `PATCH`, `DELETE`, and authenticated `POST` via [`applicationCsrfMiddleware.js`](backend/src/middlewares/applicationCsrfMiddleware.js); unauthenticated guest `POST` submissions are exempt)
+  * *(Note: `POST /login`, `POST /register`, `POST /logout`, and `/api/*` JSON endpoints do not currently require CSRF tokens.)*
+* **No Password Hash Exposure:** `password_hash` is queried only inside `userModel.getUserByEmail` for login verification and is excluded from `getSessionUserById`, directory queries, profile queries, admin queries, JSON API responses, and HTML views.
+
+---
+
+### 8. Authentication & Authorization Test Commands
+
+All commands below are defined in [`backend/package.json`](backend/package.json) and should be run from the **`backend/`** directory:
+
+* **Live HTTP / MySQL Integration Tests** *(require a running server on `http://127.0.0.1:3000`, or set `TEST_URL`)*:
+  ```bash
+  npm run test:register         # Registration validation, scrypt hashing, duplicate email, admin restriction
+  npm run test:auth             # Login, logout, MySQL sessions, session ID regeneration
+  npm run test:auth-middleware  # Public vs protected routes, browser redirects, API 401s, guest applications
+  npm run test:admin            # Admin panel, single-admin constraints, and Admin API
+  npm test                      # Nested user job routes, ownership isolation, and Task 2 rules
+  ```
+* **Offline Unit Tests** *(no running server required)*:
+  ```bash
+  npm run test:admin:unit       # Admin authorization and CSRF unit tests
+  npm run test:nav:unit         # Role-based navigation unit tests
+  npm run test:profile:unit     # /profile validation, mass-assignment protection, and CSRF unit tests
+  npm run test:my-apps:unit     # /my-applications, application RBAC, URL/email validation, and CSRF unit tests
+  npm run test:phase3:unit      # User directory, job posting ownership/validation, announcement RBAC, and MVC CSRF unit tests
+  ```
+
