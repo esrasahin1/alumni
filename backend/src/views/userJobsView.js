@@ -9,7 +9,7 @@
  * @param {string} str
  * @returns {string}
  */
-const { NAV_AUTH_CSS, renderNavAuthItems } = require('./navAuthHelper');
+const { NAV_AUTH_CSS, getUserNavRole, renderNavbarLinks } = require('./navAuthHelper');
 
 const escapeHtml = (str) => {
   return String(str ?? '')
@@ -67,6 +67,12 @@ const renderUserJobsPage = (user = {}, jobPostings = [], currentUser = null) => 
   const userName = user && user.name ? user.name : `User #${user && user.id ? user.id : 'Unknown'}`;
   const userEmail = user && user.email ? user.email : '-';
   const userId = user && user.id ? user.id : '-';
+  const isOwnAlumniJobs =
+    getUserNavRole(currentUser) === 'alumni' &&
+    currentUser &&
+    user &&
+    Number(currentUser.id) === Number(user.id);
+  const activeNav = isOwnAlumniJobs ? 'my-jobs' : 'users';
 
   const rows = jobs.length > 0
     ? jobs.map(job => `
@@ -858,14 +864,7 @@ ${NAV_AUTH_CSS}
 
       <!-- Desktop & Mobile Navigation Links (Users Clearly Marked Active) -->
       <nav class="nav-menu" id="nav-menu" aria-label="Main Navigation">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/about" class="nav-link">About</a>
-        <a href="/users" class="nav-link active">Users</a>
-        <a href="/announcements" class="nav-link">Announcements</a>
-        <a href="/job-postings" class="nav-link">Job Postings</a>
-        <a href="/applications" class="nav-link">Applications</a>
-        ${renderNavAuthItems(currentUser, escapeHtml)}
-        <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
+        ${renderNavbarLinks({ currentUser, activeNav, escapeHtml })}
       </nav>
     </div>
   </header>

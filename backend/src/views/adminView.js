@@ -1,4 +1,5 @@
 const { ALLOWED_APPLICATION_STATUSES } = require('../models/applicationModel');
+const { renderNavbarLinks } = require('./navAuthHelper');
 
 const escapeHtml = (str) => {
   if (str === null || str === undefined) return '';
@@ -18,19 +19,6 @@ const formatDate = (value) => {
 };
 
 const getAdminLayout = (title, activeSection, content, currentUser = null) => {
-  const adminNavItem =
-    currentUser && currentUser.auth_role === 'admin'
-      ? `<a href="/admin" class="nav-link active">Admin Panel</a>`
-      : '';
-
-  const authNavItems = currentUser
-    ? `<span class="nav-user-pill" title="${escapeHtml(currentUser.email || '')}">👤 ${escapeHtml(currentUser.name)}</span>
-        <form action="/logout" method="POST" style="display:inline; margin:0;">
-          <button type="submit" class="nav-link nav-logout-btn">Logout</button>
-        </form>`
-    : `<a href="/login" class="nav-link">Login</a>
-        <a href="/register" class="nav-link">Register</a>`;
-
   const subTabs = [
     { key: 'overview', href: '/admin', label: 'Overview' },
     { key: 'users', href: '/admin/users', label: 'Users' },
@@ -158,6 +146,47 @@ const getAdminLayout = (title, activeSection, content, currentUser = null) => {
       color: var(--lime);
       font-size: 0.85rem;
       font-weight: 600;
+      white-space: nowrap;
+    }
+    .nav-role-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.12rem 0.48rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .nav-role-admin {
+      background: rgba(251, 191, 36, 0.2);
+      border: 1px solid rgba(251, 191, 36, 0.5);
+      color: #fde68a;
+    }
+    .nav-role-alumni {
+      background: rgba(213, 243, 106, 0.18);
+      border: 1px solid rgba(213, 243, 106, 0.45);
+      color: var(--lime);
+    }
+    .nav-role-student {
+      background: rgba(109, 140, 255, 0.22);
+      border: 1px solid rgba(109, 140, 255, 0.5);
+      color: #c7d6ff;
+    }
+    .nav-role-user {
+      background: rgba(185, 195, 210, 0.15);
+      border: 1px solid rgba(185, 195, 210, 0.35);
+      color: var(--secondary-text);
+    }
+    .nav-cta {
+      background: var(--secondary-navy);
+      border: 1px solid var(--subtle-border);
+      color: var(--lime) !important;
+      font-weight: 600;
+    }
+    .nav-cta:hover {
+      background: rgba(213, 243, 106, 0.12) !important;
+      border-color: var(--lime) !important;
     }
     .nav-logout-btn {
       background: transparent;
@@ -438,15 +467,8 @@ const getAdminLayout = (title, activeSection, content, currentUser = null) => {
         <span class="brand-title">Alumni Tracking</span>
       </a>
       <button class="mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Toggle Menu">&#9776;</button>
-      <nav class="nav-links">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/about" class="nav-link">About</a>
-        <a href="/users" class="nav-link">Directory</a>
-        <a href="/announcements" class="nav-link">Announcements</a>
-        <a href="/job-postings" class="nav-link">Job Board</a>
-        <a href="/applications" class="nav-link">Applications</a>
-        ${adminNavItem}
-        ${authNavItems}
+      <nav class="nav-links" aria-label="Main Navigation">
+        ${renderNavbarLinks({ currentUser, activeNav: 'admin', escapeHtml })}
       </nav>
     </div>
   </header>

@@ -3,6 +3,8 @@
  * Eşleşmeyen veya geçersiz web isteklerinde kullanıcıya sunulacak kurumsal şablonu üretir.
  */
 
+const { renderNavbarLinks } = require('./navAuthHelper');
+
 /**
  * XSS zafiyetlerini önlemek için HTML özel karakterlerini filtreler.
  *
@@ -29,12 +31,14 @@ const escapeHtml = (str) => {
 const renderNotFoundPage = (reqOrUrl) => {
   let url = '';
   let method = 'GET';
+  let currentUser = null;
 
   if (typeof reqOrUrl === 'string') {
     url = reqOrUrl;
   } else if (reqOrUrl && typeof reqOrUrl === 'object') {
     url = reqOrUrl.originalUrl || reqOrUrl.url || '';
     method = reqOrUrl.method || 'GET';
+    currentUser = reqOrUrl.user || null;
   }
 
   const safeUrl = escapeHtml(url);
@@ -68,15 +72,53 @@ const renderNotFoundPage = (reqOrUrl) => {
       font-size: 14px;
       border-bottom: 1px solid #edf2f7;
       padding-bottom: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
     }
-    .nav-links a {
+    .nav-links a,
+    .nav-links .nav-link {
       color: #3182ce;
       text-decoration: none;
-      margin-right: 16px;
       font-weight: 500;
+      padding: 4px 8px;
+      border-radius: 6px;
     }
-    .nav-links a:hover {
+    .nav-links a:hover,
+    .nav-links .nav-link:hover {
       text-decoration: underline;
+    }
+    .nav-user-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: #ebf4ff;
+      border: 1px solid #bee3f8;
+      color: #2b6cb0;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .nav-role-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 6px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: #edf2f7;
+      color: #2d3748;
+    }
+    .nav-logout-btn {
+      background: transparent;
+      border: 1px solid #feb2b2;
+      color: #c53030 !important;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
     }
     .error-hero {
       text-align: center;
@@ -208,14 +250,9 @@ const renderNotFoundPage = (reqOrUrl) => {
 </head>
 <body>
   <div class="container">
-    <div class="nav-links">
-      <a href="/">🏠 Ana Sayfa</a>
-      <a href="/users">👥 Kullanıcılar</a>
-      <a href="/announcements">📢 Duyurular</a>
-      <a href="/job-postings">💼 İş İlanları</a>
-      <a href="/applications">📝 Başvurular</a>
-      <a href="/api/swagger">⚡ Swagger API</a>
-    </div>
+    <nav class="nav-links" aria-label="Main Navigation">
+      ${renderNavbarLinks({ currentUser, activeNav: '', escapeHtml })}
+    </nav>
 
     <div class="error-hero">
       <div class="error-code">404</div>

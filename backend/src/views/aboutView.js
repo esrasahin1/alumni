@@ -16,7 +16,7 @@
  * @param {string} str
  * @returns {string}
  */
-const { NAV_AUTH_CSS, renderNavAuthItems } = require('./navAuthHelper');
+const { NAV_AUTH_CSS, renderNavbarLinks } = require('./navAuthHelper');
 
 const escapeHtml = (str) => {
   return String(str ?? '')
@@ -847,14 +847,7 @@ ${NAV_AUTH_CSS}
 
       <!-- Desktop & Mobile Navigation Links (Home & About Clearly Included) -->
       <nav class="nav-menu" id="nav-menu" aria-label="Main Navigation">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/about" class="nav-link active">About</a>
-        <a href="/users" class="nav-link">Users</a>
-        <a href="/announcements" class="nav-link">Announcements</a>
-        <a href="/job-postings" class="nav-link">Job Postings</a>
-        <a href="/applications" class="nav-link">Applications</a>
-        ${renderNavAuthItems(currentUser, escapeHtml)}
-        <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
+        ${renderNavbarLinks({ currentUser, activeNav: 'about', escapeHtml })}
       </nav>
     </div>
   </header>

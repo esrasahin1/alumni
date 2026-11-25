@@ -3,6 +3,8 @@
  * Alumni Tracking System — Full Midnight (Dark & Premium) Design System.
  */
 
+const { NAV_AUTH_CSS, renderNavbarLinks } = require('./navAuthHelper');
+
 /**
  * Escapes HTML special characters to prevent XSS vulnerabilities.
  *
@@ -29,21 +31,6 @@ const escapeHtml = (str) => {
  * @returns {string} HTML string
  */
 const getLayout = (title, content, { activePage = 'register', currentUser = null } = {}) => {
-  const adminNavItem =
-    currentUser && currentUser.auth_role === 'admin'
-      ? '\n        <a href="/admin" class="nav-link">Admin Panel</a>'
-      : '';
-
-  const authNavItems = currentUser
-    ? `
-        <span class="nav-user-pill" title="${escapeHtml(currentUser.email || '')}">👤 ${escapeHtml(currentUser.name)}</span>
-        <form action="/logout" method="POST" style="display:inline; margin:0;">
-          <button type="submit" class="nav-link nav-logout-btn">Logout</button>
-        </form>`
-    : `
-        <a href="/login" class="nav-link ${activePage === 'login' ? 'active' : ''}">Login</a>
-        <a href="/register" class="nav-link ${activePage === 'register' ? 'active' : ''}">Register</a>`;
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -224,33 +211,7 @@ const getLayout = (title, content, { activePage = 'register', currentUser = null
       color: var(--lime) !important;
       transform: translateY(-1px);
     }
-
-    .nav-user-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: var(--radius-full);
-      background: rgba(109, 140, 255, 0.14);
-      border: 1px solid rgba(109, 140, 255, 0.35);
-      color: var(--soft-white);
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .nav-logout-btn {
-      background: transparent;
-      border: 1px solid rgba(229, 62, 62, 0.45);
-      color: #feb2b2;
-      cursor: pointer;
-      font-family: inherit;
-    }
-
-    .nav-logout-btn:hover {
-      background: rgba(229, 62, 62, 0.16);
-      border-color: #e53e3e;
-      color: #ffffff;
-    }
+${NAV_AUTH_CSS}
 
     .mobile-menu-toggle {
       display: none;
@@ -774,14 +735,7 @@ const getLayout = (title, content, { activePage = 'register', currentUser = null
       </button>
 
       <nav class="nav-menu" id="nav-menu" aria-label="Main Navigation">
-        <a href="/" class="nav-link">Home</a>
-        <a href="/about" class="nav-link">About</a>
-        <a href="/users" class="nav-link">Users</a>
-        <a href="/announcements" class="nav-link">Announcements</a>
-        <a href="/job-postings" class="nav-link">Job Postings</a>
-        <a href="/applications" class="nav-link">Applications</a>${adminNavItem}
-        ${authNavItems}
-        <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
+        ${renderNavbarLinks({ currentUser, activeNav: activePage, escapeHtml })}
       </nav>
     </div>
   </header>
