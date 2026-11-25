@@ -13,7 +13,8 @@
     "db:seed": "node src/database/seed.js",
     "test": "node test_nested_route.js",
     "test:register": "node test_register.js",
-    "test:auth": "node test_auth.js"
+    "test:auth": "node test_auth.js",
+    "test:auth-middleware": "node test_auth_middleware.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

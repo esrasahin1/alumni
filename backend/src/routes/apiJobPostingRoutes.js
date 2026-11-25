@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const apiJobPostingController = require('../controllers/apiJobPostingController');
+const { requireAuth } = require('../middlewares/requireAuthMiddleware');
 
-// /api/job-postings CRUD rotaları (JSON REST API)
+// /api/job-postings CRUD rotaları (JSON REST API; GET public, mutations protected)
 router.get('/', apiJobPostingController.getJobPostings);
-router.post('/', apiJobPostingController.createJobPosting);
+router.post('/', requireAuth, apiJobPostingController.createJobPosting);
 router.get('/:id', apiJobPostingController.getJobPosting);
-router.put('/:id', apiJobPostingController.updateJobPosting);
-router.patch('/:id', apiJobPostingController.patchJobPosting);
-router.delete('/:id', apiJobPostingController.deleteJobPosting);
+router.put('/:id', requireAuth, apiJobPostingController.updateJobPosting);
+router.patch('/:id', requireAuth, apiJobPostingController.patchJobPosting);
+router.delete('/:id', requireAuth, apiJobPostingController.deleteJobPosting);
 
 module.exports = router;

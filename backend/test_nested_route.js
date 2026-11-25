@@ -2,25 +2,39 @@ const assert = require('assert');
 const http = require('http');
 const userModel = require('./src/models/userModel');
 const jobPostingModel = require('./src/models/jobPostingModel');
+const { SESSION_COOKIE_NAME, sessionStore } = require('./src/config/session');
 
 const BASE_URL = process.env.TEST_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
 const parsedUrl = new URL(BASE_URL);
+let defaultSessionCookie = '';
 
-function request(path, method = 'GET', body = null) {
+function request(path, method = 'GET', body = null, { contentType = 'application/json', accept = 'application/json', useAuthCookie = true } = {}) {
   return new Promise((resolve, reject) => {
+    const headers = {
+      'Accept': accept
+    };
+    if (useAuthCookie && defaultSessionCookie) {
+      headers['Cookie'] = defaultSessionCookie;
+    }
+
+    let payload = null;
+    if (body !== null && body !== undefined) {
+      headers['Content-Type'] = contentType;
+      if (contentType === 'application/x-www-form-urlencoded') {
+        payload = typeof body === 'string' ? body : new URLSearchParams(body).toString();
+      } else {
+        payload = typeof body === 'string' ? body : JSON.stringify(body);
+      }
+      headers['Content-Length'] = Buffer.byteLength(payload);
+    }
+
     const options = {
       hostname: parsedUrl.hostname,
       port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
       path: path,
       method: method,
-      headers: {
-        'Accept': 'application/json'
-      }
+      headers
     };
-
-    if (body) {
-      options.headers['Content-Type'] = 'application/json';
-    }
 
     const req = http.request(options, (res) => {
       let data = '';
@@ -38,11 +52,27 @@ function request(path, method = 'GET', body = null) {
 
     req.on('error', reject);
 
-    if (body) {
-      req.write(JSON.stringify(body));
+    if (payload !== null) {
+      req.write(payload);
     }
     req.end();
   });
+}
+
+function extractSessionCookie(setCookieHeaders = []) {
+  const list = Array.isArray(setCookieHeaders) ? setCookieHeaders : (setCookieHeaders ? [setCookieHeaders] : []);
+  const match = list.find((header) => header.startsWith(`${SESSION_COOKIE_NAME}=`));
+  if (!match) return null;
+
+  const cookiePair = match.split(';')[0];
+  const rawValue = cookiePair.slice(`${SESSION_COOKIE_NAME}=`.length);
+  const decodedValue = decodeURIComponent(rawValue);
+  let sessionId = null;
+  if (decodedValue.startsWith('s:')) {
+    const dotIdx = decodedValue.indexOf('.', 2);
+    sessionId = dotIdx !== -1 ? decodedValue.slice(2, dotIdx) : decodedValue.slice(2);
+  }
+  return { cookiePair, sessionId };
 }
 
 async function runTests() {
@@ -63,6 +93,8 @@ async function runTests() {
   }
 
   const createdJobIds = [];
+  let authUserId = null;
+  let authSessionId = null;
 
   try {
     // 1. Test existing users in database
@@ -91,6 +123,31 @@ async function runTests() {
     }
 
     console.log(`✅ Selected test user #${testUser.id} (${testUser.name}, ${testUser.email})`);
+
+    // Authenticate session for protected API routes
+    const authEmail = `nested.auth.${Date.now()}_${process.pid}@alumni.edu.tr`;
+    const authPass = 'NestedAuthPass123!';
+    const regAuthRes = await request('/register', 'POST', {
+      name: 'Nested Suite Auth User',
+      email: authEmail,
+      password: authPass,
+      confirm_password: authPass,
+      role: 'alumni'
+    }, { contentType: 'application/x-www-form-urlencoded', accept: 'text/html', useAuthCookie: false });
+    const authUser = await userModel.getUserByEmail(authEmail);
+    if (authUser && authUser.id) authUserId = authUser.id;
+    assert.strictEqual(regAuthRes.status, 303, 'Temporary auth user registration should succeed');
+
+    const loginAuthRes = await request('/login', 'POST', {
+      email: authEmail,
+      password: authPass
+    }, { contentType: 'application/x-www-form-urlencoded', accept: 'text/html', useAuthCookie: false });
+    assert.strictEqual(loginAuthRes.status, 303, 'Temporary auth user login should succeed');
+    const parsedCookie = extractSessionCookie(loginAuthRes.headers['set-cookie']);
+    assert(parsedCookie && parsedCookie.cookiePair, 'Session cookie should be issued');
+    defaultSessionCookie = parsedCookie.cookiePair;
+    authSessionId = parsedCookie.sessionId;
+    console.log('✅ Authenticated session established for protected API endpoints');
 
     // 2. Test GET 404 for non-existent user ID
     console.log('\n--- Test 2: GET /api/users/999999/jobs (Non-existent user) ---');
@@ -322,6 +379,20 @@ async function runTests() {
         await jobPostingModel.deleteJobPosting(id);
       }
       console.log('✅ Temporary test job postings cleaned up.');
+    }
+    if (authSessionId) {
+      try {
+        await sessionStore.destroy(authSessionId);
+      } catch (err) {
+        console.error(`⚠️  Failed to delete test session (${authSessionId}): ${err.message}`);
+      }
+    }
+    if (authUserId) {
+      try {
+        await userModel.deleteUser(authUserId);
+      } catch (err) {
+        console.error(`⚠️  Failed to delete test auth user #${authUserId}: ${err.message}`);
+      }
     }
   }
 }

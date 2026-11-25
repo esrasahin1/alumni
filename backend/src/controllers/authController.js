@@ -244,16 +244,22 @@ function validateLoginInput(body = {}) {
 
 /**
  * GET /login
- * Renders the HTML login page (and logout confirmation banner if redirected from /logout).
+ * Renders the HTML login page (and logout/authRequired banner when redirected).
  */
 const showLoginPage = (req, res) => {
   const isLoggedOut = req && req.query && req.query.loggedOut === '1';
+  const isAuthRequired = req && req.query && req.query.authRequired === '1';
+
   const successMessage = isLoggedOut
     ? 'You have been logged out successfully.'
+    : '';
+  const infoMessage = isAuthRequired
+    ? 'Please sign in to access that page.'
     : '';
 
   const html = authView.renderLoginPage({
     successMessage,
+    infoMessage,
     currentUser: req && req.user ? req.user : null
   });
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

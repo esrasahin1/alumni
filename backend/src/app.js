@@ -18,6 +18,7 @@ const notFoundMiddleware = require('./middlewares/notFoundMiddleware');
 const errorHandlerMiddleware = require('./middlewares/errorHandlerMiddleware');
 const { sessionMiddleware } = require('./config/session');
 const { attachCurrentUser } = require('./middlewares/authContextMiddleware');
+const { requireAuth } = require('./middlewares/requireAuthMiddleware');
 const { renderHomePage } = require('./views/homeView');
 const { renderAboutPage } = require('./views/aboutView');
 
@@ -75,10 +76,10 @@ app.use('/api/announcements', apiAnnouncementRoutes);
 app.use('/job-postings', jobPostingRoutes);
 app.use('/api/job-postings', apiJobPostingRoutes);
 
-// Nested routes under Job Postings
-app.get('/job-postings/:jobPostingId/applications', applicationController.getApplicationsByJobPosting);
+// Nested routes under Job Postings (review/listing protected, guest submission preserved)
+app.get('/job-postings/:jobPostingId/applications', requireAuth, applicationController.getApplicationsByJobPosting);
 app.post('/job-postings/:jobPostingId/applications', applicationController.createApplicationForJobPosting);
-app.get('/api/job-postings/:jobPostingId/applications', apiApplicationController.getApplicationsByJobPosting);
+app.get('/api/job-postings/:jobPostingId/applications', requireAuth, apiApplicationController.getApplicationsByJobPosting);
 app.post('/api/job-postings/:jobPostingId/applications', apiApplicationController.createApplicationForJobPosting);
 
 // Direct Application routes

@@ -214,10 +214,19 @@ async function runTests() {
 
     // 6. Legacy user without password_hash cannot log in
     console.log('\n--- Test 6: Legacy user without password_hash rejected with 401 ---');
+    const helperLoginRes = await request('/login', 'POST', {
+      email: studentEmail,
+      password: studentPass
+    }, { contentType: 'application/x-www-form-urlencoded' });
+    assert.strictEqual(helperLoginRes.status, 303);
+    const helperCookie = extractSessionCookie(helperLoginRes.headers['set-cookie']);
+    assert(helperCookie && helperCookie.cookiePair);
+    if (helperCookie.sessionId) trackSessionId(helperCookie.sessionId);
+
     const legacyRes = await request('/api/users', 'POST', {
       name: 'Legacy No Password User',
       email: legacyEmail
-    }, { contentType: 'application/json', accept: 'application/json' });
+    }, { contentType: 'application/json', accept: 'application/json', cookie: helperCookie.cookiePair });
     if (legacyRes.body && legacyRes.body.id) {
       trackUserId(legacyRes.body.id);
     } else {
@@ -305,7 +314,7 @@ async function runTests() {
 
     // 10. Existing API routes and response structures remain unchanged
     console.log('\n--- Test 10: Existing API routes and response shapes unchanged ---');
-    const apiUsersRes = await request('/api/users', 'GET', null, { accept: 'application/json' });
+    const apiUsersRes = await request('/api/users', 'GET', null, { accept: 'application/json', cookie: helperCookie.cookiePair });
     assert.strictEqual(apiUsersRes.status, 200);
     assert(Array.isArray(apiUsersRes.body));
     const apiLegacyUser = apiUsersRes.body.find((u) => u.id === legacyRes.body.id);
@@ -316,7 +325,7 @@ async function runTests() {
       'Existing /api/users response structure must remain unchanged'
     );
 
-    const nestedJobsRes = await request(`/api/users/${legacyRes.body.id}/jobs`, 'GET', null, { accept: 'application/json' });
+    const nestedJobsRes = await request(`/api/users/${legacyRes.body.id}/jobs`, 'GET', null, { accept: 'application/json', cookie: helperCookie.cookiePair });
     assert.strictEqual(nestedJobsRes.status, 200);
     assert(Array.isArray(nestedJobsRes.body));
     console.log('✅ Existing API response structures verified');

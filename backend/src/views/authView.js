@@ -395,6 +395,11 @@ const getLayout = (title, content, { activePage = 'register', currentUser = null
       background: linear-gradient(180deg, rgba(229, 62, 62, 0.12) 0%, var(--secondary-navy) 100%);
     }
 
+    .card-info {
+      border-color: rgba(109, 140, 255, 0.5);
+      background: linear-gradient(180deg, rgba(109, 140, 255, 0.14) 0%, var(--secondary-navy) 100%);
+    }
+
     .alert-title {
       font-size: 16px;
       font-weight: 700;
@@ -404,6 +409,11 @@ const getLayout = (title, content, { activePage = 'register', currentUser = null
 
     .alert-success-text {
       color: #a7f3d0;
+      font-size: 14px;
+    }
+
+    .alert-info-text {
+      color: #dbeafe;
       font-size: 14px;
     }
 
@@ -1038,6 +1048,7 @@ const renderRegisterPage = ({
  * @param {Array<string>} [options.errors=[]] - Summary error messages
  * @param {Object} [options.fieldErrors={}] - Per-field error messages
  * @param {string} [options.successMessage=''] - Logout/info banner message
+ * @param {string} [options.infoMessage=''] - Auth-required notice message
  * @param {Object|null} [options.currentUser=null] - Currently authenticated user, if any
  * @returns {string} HTML string
  */
@@ -1046,9 +1057,18 @@ const renderLoginPage = ({
   errors = [],
   fieldErrors = {},
   successMessage = '',
+  infoMessage = '',
   currentUser = null
 } = {}) => {
   const safeEmail = escapeHtml(values.email || '');
+
+  const infoBlock = infoMessage
+    ? `
+      <div class="card card-info" role="status" aria-live="polite">
+        <div class="alert-title">🔒 Authentication Required</div>
+        <p class="alert-info-text">${escapeHtml(infoMessage)}</p>
+      </div>`
+    : '';
 
   const successBlock = successMessage
     ? `
@@ -1094,6 +1114,7 @@ const renderLoginPage = ({
       <p class="page-subtitle">Sign in with your registered email address and password to start an authenticated session.</p>
     </div>
 
+    ${infoBlock}
     ${successBlock}
     ${errorBlock}
     ${activeSessionBlock}

@@ -2,15 +2,19 @@ const assert = require('assert');
 const http = require('http');
 const userModel = require('./src/models/userModel');
 const { verifyPassword } = require('./src/utils/passwordUtils');
+const { SESSION_COOKIE_NAME, sessionStore } = require('./src/config/session');
 
 const BASE_URL = process.env.TEST_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
 const parsedUrl = new URL(BASE_URL);
 
-function request(path, method = 'GET', body = null, contentType = 'application/json', accept = 'text/html') {
+function request(path, method = 'GET', body = null, contentType = 'application/json', accept = 'text/html', cookie = '') {
   return new Promise((resolve, reject) => {
     const headers = {
       Accept: accept
     };
+    if (cookie) {
+      headers.Cookie = cookie;
+    }
 
     let payload = null;
     if (body !== null && body !== undefined) {
@@ -58,6 +62,22 @@ function request(path, method = 'GET', body = null, contentType = 'application/j
   });
 }
 
+function extractSessionCookie(setCookieHeaders = []) {
+  const list = Array.isArray(setCookieHeaders) ? setCookieHeaders : (setCookieHeaders ? [setCookieHeaders] : []);
+  const match = list.find((header) => header.startsWith(`${SESSION_COOKIE_NAME}=`));
+  if (!match) return null;
+
+  const cookiePair = match.split(';')[0];
+  const rawValue = cookiePair.slice(`${SESSION_COOKIE_NAME}=`.length);
+  const decodedValue = decodeURIComponent(rawValue);
+  let sessionId = null;
+  if (decodedValue.startsWith('s:')) {
+    const dotIdx = decodedValue.indexOf('.', 2);
+    sessionId = dotIdx !== -1 ? decodedValue.slice(2, dotIdx) : decodedValue.slice(2);
+  }
+  return { cookiePair, sessionId };
+}
+
 async function runTests() {
   console.log('🧪 Starting Registration Test Suite (GET & POST /register)...\n');
   console.log(`📡 Connecting to running server at ${BASE_URL} ...`);
@@ -74,6 +94,7 @@ async function runTests() {
   }
 
   const createdUserIds = new Set();
+  const trackedSessionIds = new Set();
   const trackUserId = (id) => {
     const numId = Number(id);
     if (Number.isInteger(numId) && numId > 0) {
@@ -180,24 +201,34 @@ async function runTests() {
     assert.strictEqual(storedAlumni.graduation_year, null, 'Empty optional graduation_year should store NULL');
     console.log('✅ Alumni registration verified');
 
-    // 4. Password hash is NOT exposed in public user responses
+    // 4. Password hash is NOT exposed in public user responses (authenticate first for protected /users & /api/users)
     console.log('\n--- Test 4: Password hash is not exposed in public user responses ---');
-    const apiUsersRes = await request('/api/users', 'GET', null, 'application/json', 'application/json');
+    const loginForReadRes = await request('/login', 'POST', {
+      email: studentEmail,
+      password: studentPass
+    }, 'application/x-www-form-urlencoded');
+    assert.strictEqual(loginForReadRes.status, 303);
+    const parsedCookie = extractSessionCookie(loginForReadRes.headers['set-cookie']);
+    assert(parsedCookie && parsedCookie.cookiePair, 'Session cookie should be issued for protected route verification');
+    if (parsedCookie.sessionId) trackedSessionIds.add(parsedCookie.sessionId);
+    const authCookie = parsedCookie.cookiePair;
+
+    const apiUsersRes = await request('/api/users', 'GET', null, 'application/json', 'application/json', authCookie);
     assert.strictEqual(apiUsersRes.status, 200);
     assert(Array.isArray(apiUsersRes.body));
     const apiStudent = apiUsersRes.body.find((u) => u.id === storedStudent.id);
     assert(apiStudent, 'Student should be returned in /api/users');
     assert.strictEqual(apiStudent.password_hash, undefined, 'password_hash must not be exposed in /api/users');
 
-    const apiUserDetailRes = await request(`/api/users/${storedStudent.id}`, 'GET', null, 'application/json', 'application/json');
+    const apiUserDetailRes = await request(`/api/users/${storedStudent.id}`, 'GET', null, 'application/json', 'application/json', authCookie);
     assert.strictEqual(apiUserDetailRes.status, 200);
     assert.strictEqual(apiUserDetailRes.body.password_hash, undefined, 'password_hash must not be exposed in /api/users/:id');
 
-    const htmlUsersRes = await request('/users', 'GET');
+    const htmlUsersRes = await request('/users', 'GET', null, 'application/json', 'text/html', authCookie);
     assert.strictEqual(htmlUsersRes.status, 200);
     assert(!htmlUsersRes.rawBody.includes(storedStudent.password_hash), 'password_hash must not appear in /users HTML');
 
-    const htmlUserDetailRes = await request(`/users/${storedStudent.id}`, 'GET');
+    const htmlUserDetailRes = await request(`/users/${storedStudent.id}`, 'GET', null, 'application/json', 'text/html', authCookie);
     assert.strictEqual(htmlUserDetailRes.status, 200);
     assert(!htmlUserDetailRes.rawBody.includes(storedStudent.password_hash), 'password_hash must not appear in /users/:id HTML');
     console.log('✅ Password hash exclusion across API and HTML views verified');
@@ -319,7 +350,7 @@ async function runTests() {
     const createCrudRes = await request('/api/users', 'POST', {
       name: 'CRUD Compat User',
       email: crudEmail
-    }, 'application/json', 'application/json');
+    }, 'application/json', 'application/json', authCookie);
     if (createCrudRes.body && createCrudRes.body.id) {
       trackUserId(createCrudRes.body.id);
     } else {
@@ -328,13 +359,13 @@ async function runTests() {
     assert.strictEqual(createCrudRes.status, 201);
     assert(createCrudRes.body && createCrudRes.body.id);
 
-    const nestedJobsRes = await request(`/api/users/${createCrudRes.body.id}/jobs`, 'GET', null, 'application/json', 'application/json');
+    const nestedJobsRes = await request(`/api/users/${createCrudRes.body.id}/jobs`, 'GET', null, 'application/json', 'application/json', authCookie);
     assert.strictEqual(nestedJobsRes.status, 200);
     assert(Array.isArray(nestedJobsRes.body));
 
     const patchCrudRes = await request(`/api/users/${createCrudRes.body.id}`, 'PATCH', {
       name: 'CRUD Compat Updated'
-    }, 'application/json', 'application/json');
+    }, 'application/json', 'application/json', authCookie);
     assert.strictEqual(patchCrudRes.status, 200);
     assert.strictEqual(patchCrudRes.body.name, 'CRUD Compat Updated');
     console.log('✅ Existing Users CRUD and nested jobs route compatibility verified');
@@ -344,9 +375,19 @@ async function runTests() {
     testError = err;
     throw err;
   } finally {
+    const cleanupFailures = [];
+
+    for (const sid of trackedSessionIds) {
+      try {
+        await sessionStore.destroy(sid);
+      } catch (cleanupErr) {
+        cleanupFailures.push(`session:${sid}`);
+        console.error(`⚠️  Failed to delete temporary test session (${sid}): ${cleanupErr.message}`);
+      }
+    }
+
     if (createdUserIds.size > 0) {
       console.log(`🧹 Cleaning up ${createdUserIds.size} temporary test user(s) by exact ID...`);
-      const cleanupFailures = [];
 
       for (const id of createdUserIds) {
         try {
@@ -355,18 +396,17 @@ async function runTests() {
             console.warn(`⚠️  Tracked test user #${id} was already absent during cleanup.`);
           }
         } catch (cleanupErr) {
-          cleanupFailures.push({ id, error: cleanupErr });
+          cleanupFailures.push(`#${id}`);
           console.error(`⚠️  Failed to delete temporary test user #${id}: ${cleanupErr.message}`);
         }
       }
+    }
 
-      if (cleanupFailures.length === 0) {
-        console.log('✅ Temporary test users cleaned up.');
-      } else if (!testError) {
-        // Only surface cleanup failure if no primary test error occurred
-        const failedIds = cleanupFailures.map((f) => `#${f.id}`).join(', ');
-        throw new Error(`Cleanup failed for tracked test user(s): ${failedIds}`);
-      }
+    if (cleanupFailures.length === 0) {
+      console.log('✅ Temporary test users cleaned up.');
+    } else if (!testError) {
+      // Only surface cleanup failure if no primary test error occurred
+      throw new Error(`Cleanup failed for tracked test record(s): ${cleanupFailures.join(', ')}`);
     }
   }
 }

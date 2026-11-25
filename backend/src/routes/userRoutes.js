@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
+const { requireAuth } = require('../middlewares/requireAuthMiddleware');
 
-// User CRUD rotaları
+// User CRUD rotaları (Protected)
+router.use(requireAuth);
 router.get('/', userController.getUsers);
 router.post('/', userController.createUser);
 router.get('/:id/jobs', userController.getUserJobs);
