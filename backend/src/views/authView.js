@@ -23,14 +23,28 @@ const escapeHtml = (str) => {
  *
  * @param {string} title
  * @param {string} content
- * @returns {string}
+ * @param {Object} [options]
+ * @param {string} [options.activePage='register']
+ * @param {Object|null} [options.currentUser=null]
+ * @returns {string} HTML string
  */
-const getLayout = (title, content) => `<!DOCTYPE html>
+const getLayout = (title, content, { activePage = 'register', currentUser = null } = {}) => {
+  const authNavItems = currentUser
+    ? `
+        <span class="nav-user-pill" title="${escapeHtml(currentUser.email || '')}">👤 ${escapeHtml(currentUser.name)}</span>
+        <form action="/logout" method="POST" style="display:inline; margin:0;">
+          <button type="submit" class="nav-link nav-logout-btn">Logout</button>
+        </form>`
+    : `
+        <a href="/login" class="nav-link ${activePage === 'login' ? 'active' : ''}">Login</a>
+        <a href="/register" class="nav-link ${activePage === 'register' ? 'active' : ''}">Register</a>`;
+
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Alumni Tracking System - Create a new Student or Alumni account.">
+  <meta name="description" content="Alumni Tracking System - Account Authentication and Registration.">
   <title>${escapeHtml(title)} - Alumni Tracking System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -204,6 +218,33 @@ const getLayout = (title, content) => `<!DOCTYPE html>
       border-color: var(--lime) !important;
       color: var(--lime) !important;
       transform: translateY(-1px);
+    }
+
+    .nav-user-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius-full);
+      background: rgba(109, 140, 255, 0.14);
+      border: 1px solid rgba(109, 140, 255, 0.35);
+      color: var(--soft-white);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .nav-logout-btn {
+      background: transparent;
+      border: 1px solid rgba(229, 62, 62, 0.45);
+      color: #feb2b2;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .nav-logout-btn:hover {
+      background: rgba(229, 62, 62, 0.16);
+      border-color: #e53e3e;
+      color: #ffffff;
     }
 
     .mobile-menu-toggle {
@@ -724,7 +765,7 @@ const getLayout = (title, content) => `<!DOCTYPE html>
         <a href="/announcements" class="nav-link">Announcements</a>
         <a href="/job-postings" class="nav-link">Job Postings</a>
         <a href="/applications" class="nav-link">Applications</a>
-        <a href="/register" class="nav-link active">Register</a>
+        ${authNavItems}
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>
     </div>
@@ -755,7 +796,8 @@ const getLayout = (title, content) => `<!DOCTYPE html>
           <a href="/announcements">Announcements</a>
           <a href="/job-postings">Job Postings</a>
           <a href="/applications">Applications</a>
-          <a href="/register" class="active">Register</a>
+          <a href="/login" class="${activePage === 'login' ? 'active' : ''}">Login</a>
+          <a href="/register" class="${activePage === 'register' ? 'active' : ''}">Register</a>
           <a href="/api/swagger" target="_blank">Swagger Docs</a>
           <a href="/api/health" target="_blank">System Health</a>
         </div>
@@ -795,6 +837,7 @@ const getLayout = (title, content) => `<!DOCTYPE html>
 
 </body>
 </html>`;
+};
 
 /**
  * Renders the user registration page (GET /register and validation re-render on POST /register).
@@ -805,13 +848,15 @@ const getLayout = (title, content) => `<!DOCTYPE html>
  * @param {Array<string>} [options.errors=[]] - Summary validation error messages
  * @param {Object} [options.fieldErrors={}] - Per-field error messages
  * @param {string} [options.successMessage=''] - Registration success banner message
+ * @param {Object|null} [options.currentUser=null] - Currently authenticated user, if any
  * @returns {string} HTML string
  */
 const renderRegisterPage = ({
   values = {},
   errors = [],
   fieldErrors = {},
-  successMessage = ''
+  successMessage = '',
+  currentUser = null
 } = {}) => {
   const safeName = escapeHtml(values.name || '');
   const safeEmail = escapeHtml(values.email || '');
@@ -974,16 +1019,134 @@ const renderRegisterPage = ({
 
         <div class="actions-cluster">
           <button type="submit" id="registerSubmitBtn" class="btn btn-lime">Create Account</button>
+          <a href="/login" class="btn btn-secondary-dark">Already have an account? Login</a>
           <a href="/" class="btn btn-secondary-dark">Back to Home</a>
         </div>
       </form>
     </div>
   `;
 
-  return getLayout('Register', content);
+  return getLayout('Register', content, { activePage: 'register', currentUser });
+};
+
+/**
+ * Renders the user login page (GET /login and error re-render on POST /login).
+ * Never redisplays submitted password values.
+ *
+ * @param {Object} [options]
+ * @param {Object} [options.values={}] - Non-password form values (email)
+ * @param {Array<string>} [options.errors=[]] - Summary error messages
+ * @param {Object} [options.fieldErrors={}] - Per-field error messages
+ * @param {string} [options.successMessage=''] - Logout/info banner message
+ * @param {Object|null} [options.currentUser=null] - Currently authenticated user, if any
+ * @returns {string} HTML string
+ */
+const renderLoginPage = ({
+  values = {},
+  errors = [],
+  fieldErrors = {},
+  successMessage = '',
+  currentUser = null
+} = {}) => {
+  const safeEmail = escapeHtml(values.email || '');
+
+  const successBlock = successMessage
+    ? `
+      <div class="card card-success" role="status" aria-live="polite">
+        <div class="alert-title">✅ Session Updated</div>
+        <p class="alert-success-text">${escapeHtml(successMessage)}</p>
+      </div>`
+    : '';
+
+  const errorBlock = errors.length > 0
+    ? `
+      <div class="card card-danger" role="alert" aria-live="assertive">
+        <div class="alert-title">⚠️ Sign In Failed</div>
+        <ul class="error-list">
+          ${errors.map(err => `<li>${escapeHtml(err)}</li>`).join('')}
+        </ul>
+      </div>`
+    : '';
+
+  const activeSessionBlock = currentUser
+    ? `
+      <div class="card card-success">
+        <div class="alert-title">👤 Active Session</div>
+        <p class="alert-success-text" style="margin-bottom: 14px;">
+          You are currently signed in as <strong>${escapeHtml(currentUser.name)}</strong> (${escapeHtml(currentUser.email)}).
+        </p>
+        <form action="/logout" method="POST" style="margin: 0;">
+          <button type="submit" id="logoutBtn" class="btn btn-secondary-dark">Logout</button>
+        </form>
+      </div>`
+    : '';
+
+  const content = `
+    <div class="breadcrumb-nav">
+      <a href="/">Home</a>
+      <span>/</span>
+      <span>Login</span>
+    </div>
+
+    <div class="page-header">
+      <div class="page-eyebrow">🔑 MEMBER AUTHENTICATION</div>
+      <h1 class="page-headline">Sign In <span class="badge badge-navy">Alumni Portal</span></h1>
+      <p class="page-subtitle">Sign in with your registered email address and password to start an authenticated session.</p>
+    </div>
+
+    ${successBlock}
+    ${errorBlock}
+    ${activeSessionBlock}
+
+    <div class="card">
+      <h2 class="card-title">🔐 Account Login</h2>
+      <p class="card-description">Enter your registered credentials below. Passwords are never stored or displayed in plain text.</p>
+
+      <form id="loginForm" action="/login" method="POST">
+        <div class="form-group">
+          <label for="email">Email <span class="required-mark">*</span></label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            required
+            maxlength="255"
+            autocomplete="email"
+            value="${safeEmail}"
+            class="${fieldErrors.email ? 'input-error' : ''}"
+            placeholder="e.g. ayse.demir@alumni.edu.tr"
+          >
+          ${fieldErrors.email ? `<div class="field-error">${escapeHtml(fieldErrors.email)}</div>` : ''}
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password <span class="required-mark">*</span></label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            autocomplete="current-password"
+            class="${fieldErrors.password ? 'input-error' : ''}"
+            placeholder="Enter your password"
+          >
+          ${fieldErrors.password ? `<div class="field-error">${escapeHtml(fieldErrors.password)}</div>` : ''}
+        </div>
+
+        <div class="actions-cluster">
+          <button type="submit" id="loginSubmitBtn" class="btn btn-lime">Sign In</button>
+          <a href="/register" class="btn btn-secondary-dark">Create an Account</a>
+          <a href="/" class="btn btn-secondary-dark">Back to Home</a>
+        </div>
+      </form>
+    </div>
+  `;
+
+  return getLayout('Login', content, { activePage: 'login', currentUser });
 };
 
 module.exports = {
   escapeHtml,
-  renderRegisterPage
+  renderRegisterPage,
+  renderLoginPage
 };

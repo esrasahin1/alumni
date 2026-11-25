@@ -16,21 +16,29 @@ const apiApplicationController = require('./controllers/apiApplicationController
 const loggerMiddleware = require('./middlewares/loggerMiddleware');
 const notFoundMiddleware = require('./middlewares/notFoundMiddleware');
 const errorHandlerMiddleware = require('./middlewares/errorHandlerMiddleware');
+const { sessionMiddleware } = require('./config/session');
+const { attachCurrentUser } = require('./middlewares/authContextMiddleware');
 const { renderHomePage } = require('./views/homeView');
 const { renderAboutPage } = require('./views/aboutView');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+if (process.env.NODE_ENV === 'production' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
+
 app.use(loggerMiddleware);
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(sessionMiddleware);
+app.use(attachCurrentUser);
 
 // 1. Ana Sayfa (GET /) - Alumni Tracking System Portal Dashboard
 app.get('/', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(renderHomePage());
+  res.send(renderHomePage(req.user || null));
 });
 
 // 2. GET /hello → "Hello World!"

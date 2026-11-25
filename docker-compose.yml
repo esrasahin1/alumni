@@ -36,6 +36,9 @@ services:
       DB_NAME: ${DB_NAME:-alumni_db}
       PORT: ${PORT:-3000}
       NODE_ENV: ${NODE_ENV:-development}
+      SESSION_SECRET: ${SESSION_SECRET:-alumni-dev-session-secret-not-for-production}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-alumni.sid}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       db:
         condition: service_healthy

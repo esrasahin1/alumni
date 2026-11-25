@@ -34,6 +34,25 @@ const getUserById = async (id) => {
 };
 
 /**
+ * Finds safe session-context user details by ID (excluding password_hash).
+ * Used by authContextMiddleware without altering public CRUD response shapes.
+ * @param {number|string} id - User ID
+ * @returns {Promise<Object|null>} Safe user identity object or null
+ */
+const getSessionUserById = async (id) => {
+  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+    return null;
+  }
+  const userId = Number(id);
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    'SELECT id, name, email, role, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
+    [userId]
+  );
+  return rows.length > 0 ? rows[0] : null;
+};
+
+/**
  * Creates a new user in MySQL.
  * @param {Object} userData - User data { name, email }
  * @returns {Promise<Object>} Created user object
@@ -221,6 +240,7 @@ module.exports = {
   users,
   getAllUsers,
   getUserById,
+  getSessionUserById,
   getUserByEmail,
   createUser,
   createRegisteredUser,

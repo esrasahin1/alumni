@@ -38,9 +38,19 @@ const escapeHtml = (str) => {
  * @param {string} title - Sayfa başlığı
  * @param {string} badgeText - Rozet metni (ör. User View Layer)
  * @param {string} content - Sayfa gövdesi HTML içeriği
+ * @param {Object|null} [currentUser=null] - Aktif oturum kullanıcısı
  * @returns {string} HTML sayfası
  */
-const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
+const getLayout = (title, badgeText, content, currentUser = null) => {
+  const authNavItems = currentUser
+    ? `<span class="nav-user-pill" title="${escapeHtml(currentUser.email || '')}">👤 ${escapeHtml(currentUser.name)}</span>
+        <form action="/logout" method="POST" style="display:inline; margin:0;">
+          <button type="submit" class="nav-link nav-logout-btn">Logout</button>
+        </form>`
+    : `<a href="/login" class="nav-link">Login</a>
+        <a href="/register" class="nav-link">Register</a>`;
+
+  return `<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
@@ -253,6 +263,33 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       border-color: var(--lime) !important;
       color: var(--lime) !important;
       transform: translateY(-1px);
+    }
+
+    .nav-user-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius-full);
+      background: rgba(109, 140, 255, 0.14);
+      border: 1px solid rgba(109, 140, 255, 0.35);
+      color: var(--soft-white);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .nav-logout-btn {
+      background: transparent;
+      border: 1px solid rgba(229, 62, 62, 0.45);
+      color: #feb2b2;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .nav-logout-btn:hover {
+      background: rgba(229, 62, 62, 0.16);
+      border-color: #e53e3e;
+      color: #ffffff;
     }
 
     /* Mobile Menu Toggle Button */
@@ -895,7 +932,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
         <a href="/announcements" class="nav-link">Announcements</a>
         <a href="/job-postings" class="nav-link">Job Postings</a>
         <a href="/applications" class="nav-link">Applications</a>
-        <a href="/register" class="nav-link">Register</a>
+        ${authNavItems}
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>
     </div>
@@ -928,6 +965,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
           <a href="/announcements">Announcements</a>
           <a href="/job-postings">Job Postings</a>
           <a href="/applications">Applications</a>
+          <a href="/login">Login</a>
           <a href="/register">Register</a>
           <a href="/api/swagger" target="_blank">Swagger Docs</a>
           <a href="/api/health" target="_blank">System Health</a>
@@ -969,14 +1007,16 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
 
 </body>
 </html>`;
+};
 
 /**
  * 1. GET /users: Tüm kullanıcıları listeler (Read - R) ve User Management CRUD işlemlerini sunar
  *
  * @param {Array} users - Kullanıcı listesi
+ * @param {Object|null} [currentUser=null] - Aktif oturum kullanıcısı
  * @returns {string} HTML içeriği
  */
-const renderUsersPage = (users = []) => {
+const renderUsersPage = (users = [], currentUser = null) => {
   const userRows = users.length > 0
     ? users.map(user => `
       <tr>
@@ -1145,16 +1185,17 @@ const renderUsersPage = (users = []) => {
     </script>
   `;
 
-  return getLayout("User Management", "User View Layer", content);
+  return getLayout("User Management", "User View Layer", content, currentUser);
 };
 
 /**
  * 2. POST /users: Yeni kullanıcı oluşturulduğunda HTML sayfası (Create - C)
  *
  * @param {Object} user - Oluşturulan kullanıcı
+ * @param {Object|null} [currentUser=null] - Aktif oturum kullanıcısı
  * @returns {string} HTML içeriği
  */
-const renderUserCreatedPage = (user) => {
+const renderUserCreatedPage = (user, currentUser = null) => {
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1198,16 +1239,17 @@ const renderUserCreatedPage = (user) => {
     </div>
   `;
 
-  return getLayout("Kullanıcı Oluşturuldu", "User View Layer", content);
+  return getLayout("Kullanıcı Oluşturuldu", "User View Layer", content, currentUser);
 };
 
 /**
  * 3. GET /users/:id: Tek bir kullanıcının detay bilgisi (Read - R)
  *
  * @param {Object} user - Kullanıcı nesnesi
+ * @param {Object|null} [currentUser=null] - Aktif oturum kullanıcısı
  * @returns {string} HTML içeriği
  */
-const renderUserDetailPage = (user) => {
+const renderUserDetailPage = (user, currentUser = null) => {
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1261,7 +1303,7 @@ const renderUserDetailPage = (user) => {
     </div>
   `;
 
-  return getLayout(`Kullanıcı Detayı #${user.id}`, "User View Layer", content);
+  return getLayout(`Kullanıcı Detayı #${user.id}`, "User View Layer", content, currentUser);
 };
 
 /**
@@ -1270,9 +1312,10 @@ const renderUserDetailPage = (user) => {
  * @param {Object} user - Güncellenen kullanıcı nesnesi
  * @param {Object} [options] - Seçenekler
  * @param {boolean} [options.isPartial=false] - Kısmi güncelleme kontrolü
+ * @param {Object|null} [options.currentUser=null] - Aktif oturum kullanıcısı
  * @returns {string} HTML içeriği
  */
-const renderUserUpdatedPage = (user, { isPartial = false } = {}) => {
+const renderUserUpdatedPage = (user, { isPartial = false, currentUser = null } = {}) => {
   const updateType = isPartial ? "Kısmi Güncelleme (PATCH)" : "Tam Güncelleme (PUT)";
   const badgeClass = isPartial ? "badge-warning" : "badge-success";
 
@@ -1319,16 +1362,17 @@ const renderUserUpdatedPage = (user, { isPartial = false } = {}) => {
     </div>
   `;
 
-  return getLayout("Kullanıcı Güncellendi", "User View Layer", content);
+  return getLayout("Kullanıcı Güncellendi", "User View Layer", content, currentUser);
 };
 
 /**
  * 5. DELETE /users/:id: Kullanıcı silindiğinde HTML sayfası (Delete - D)
  *
  * @param {string|number} id - Silinen kullanıcı ID'si
+ * @param {Object|null} [currentUser=null] - Aktif oturum kullanıcısı
  * @returns {string} HTML içeriği
  */
-const renderUserDeletedPage = (id) => {
+const renderUserDeletedPage = (id, currentUser = null) => {
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1355,16 +1399,17 @@ const renderUserDeletedPage = (id) => {
     </div>
   `;
 
-  return getLayout("Kullanıcı Silindi", "User View Layer", content);
+  return getLayout("Kullanıcı Silindi", "User View Layer", content, currentUser);
 };
 
 /**
  * 6. 404: Kullanıcı bulunamadığında HTML hata sayfası
  *
  * @param {string|number} id - Bulunamayan kullanıcı ID'si
+ * @param {Object|null} [currentUser=null] - Aktif oturum kullanıcısı
  * @returns {string} HTML içeriği
  */
-const renderUserNotFoundPage = (id) => {
+const renderUserNotFoundPage = (id, currentUser = null) => {
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1393,7 +1438,7 @@ const renderUserNotFoundPage = (id) => {
     </div>
   `;
 
-  return getLayout("Kullanıcı Bulunamadı (404)", "User View Layer", content);
+  return getLayout("Kullanıcı Bulunamadı (404)", "User View Layer", content, currentUser);
 };
 
 const userJobsView = require('./userJobsView');

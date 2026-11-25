@@ -21,7 +21,7 @@ const getUsers = async (req, res) => {
     }
 
     // Varsayılan: View Layer üzerinden HTML sayfası render edilir
-    const html = userView.renderUsersPage(users);
+    const html = userView.renderUsersPage(users, req.user || null);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (error) {
@@ -41,7 +41,7 @@ const getUser = async (req, res) => {
       if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(req.params.id);
+      const html = userView.renderUserNotFoundPage(req.params.id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
@@ -50,7 +50,7 @@ const getUser = async (req, res) => {
       return res.status(200).json(user);
     }
 
-    const html = userView.renderUserDetailPage(user);
+    const html = userView.renderUserDetailPage(user, req.user || null);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (error) {
@@ -72,7 +72,7 @@ const createUser = async (req, res) => {
     }
 
     // Varsayılan: View Layer üzerinden HTML başarı sayfası render edilir
-    const html = userView.renderUserCreatedPage(newUser);
+    const html = userView.renderUserCreatedPage(newUser, req.user || null);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(201).send(html);
   } catch (error) {
@@ -107,7 +107,7 @@ const updateUser = async (req, res) => {
       return res.status(200).json(updatedUser);
     }
 
-    const html = userView.renderUserUpdatedPage(updatedUser, { isPartial: false });
+    const html = userView.renderUserUpdatedPage(updatedUser, { isPartial: false, currentUser: req.user || null });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (error) {
@@ -142,7 +142,7 @@ const patchUser = async (req, res) => {
       return res.status(200).json(updatedUser);
     }
 
-    const html = userView.renderUserUpdatedPage(updatedUser, { isPartial: true });
+    const html = userView.renderUserUpdatedPage(updatedUser, { isPartial: true, currentUser: req.user || null });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (error) {
@@ -177,7 +177,7 @@ const deleteUser = async (req, res) => {
       return res.status(204).send();
     }
 
-    const html = userView.renderUserDeletedPage(req.params.id);
+    const html = userView.renderUserDeletedPage(req.params.id, req.user || null);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (error) {

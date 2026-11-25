@@ -1,6 +1,7 @@
 const userModel = require('../models/userModel');
 const authView = require('../views/authView');
-const { hashPassword } = require('../utils/passwordUtils');
+const { hashPassword, verifyPassword } = require('../utils/passwordUtils');
+const { SESSION_COOKIE_NAME, getSessionCookieOptions } = require('../config/session');
 
 const ALLOWED_ROLES = Object.freeze(['student', 'alumni']);
 const MIN_PASSWORD_LENGTH = 8;
@@ -144,7 +145,10 @@ const showRegisterPage = (req, res) => {
     ? 'Your account has been created successfully. You can now use the portal.'
     : '';
 
-  const html = authView.renderRegisterPage({ successMessage });
+  const html = authView.renderRegisterPage({
+    successMessage,
+    currentUser: req && req.user ? req.user : null
+  });
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   return res.status(200).send(html);
 };
@@ -158,7 +162,12 @@ const register = async (req, res, next) => {
   const { errors, fieldErrors, values, parsedData } = validateRegistrationInput(req && req.body);
 
   if (errors.length > 0) {
-    const html = authView.renderRegisterPage({ values, errors, fieldErrors });
+    const html = authView.renderRegisterPage({
+      values,
+      errors,
+      fieldErrors,
+      currentUser: req && req.user ? req.user : null
+    });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(400).send(html);
   }
@@ -183,7 +192,8 @@ const register = async (req, res, next) => {
       const html = authView.renderRegisterPage({
         values,
         errors: [dupMessage],
-        fieldErrors: { email: dupMessage }
+        fieldErrors: { email: dupMessage },
+        currentUser: req && req.user ? req.user : null
       });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(409).send(html);
@@ -193,9 +203,155 @@ const register = async (req, res, next) => {
   }
 };
 
+/**
+ * Validates submitted login credentials.
+ * Preserves only normalized email; never preserves password.
+ *
+ * @param {Object} body
+ * @returns {{ errors: string[], fieldErrors: Object, values: Object, parsedData: Object }}
+ */
+function validateLoginInput(body = {}) {
+  const source = body && typeof body === 'object' ? body : {};
+  const email = source.email !== undefined && source.email !== null ? String(source.email).trim().toLowerCase() : '';
+  const password = typeof source.password === 'string' ? source.password : '';
+
+  const errors = [];
+  const fieldErrors = {};
+
+  if (!email) {
+    const msg = 'Email address is required.';
+    errors.push(msg);
+    fieldErrors.email = msg;
+  } else if (email.length > MAX_EMAIL_LENGTH || !EMAIL_REGEX.test(email)) {
+    const msg = 'Please enter a valid email address.';
+    errors.push(msg);
+    fieldErrors.email = msg;
+  }
+
+  if (!password) {
+    const msg = 'Password is required.';
+    errors.push(msg);
+    fieldErrors.password = msg;
+  }
+
+  return {
+    errors,
+    fieldErrors,
+    values: { email },
+    parsedData: { email, password }
+  };
+}
+
+/**
+ * GET /login
+ * Renders the HTML login page (and logout confirmation banner if redirected from /logout).
+ */
+const showLoginPage = (req, res) => {
+  const isLoggedOut = req && req.query && req.query.loggedOut === '1';
+  const successMessage = isLoggedOut
+    ? 'You have been logged out successfully.'
+    : '';
+
+  const html = authView.renderLoginPage({
+    successMessage,
+    currentUser: req && req.user ? req.user : null
+  });
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  return res.status(200).send(html);
+};
+
+/**
+ * POST /login
+ * Authenticates user credentials via verifyPassword(), regenerates session ID,
+ * stores minimal user identity (userId) in session, and redirects to home.
+ */
+const login = async (req, res, next) => {
+  const { errors, fieldErrors, values, parsedData } = validateLoginInput(req && req.body);
+
+  if (errors.length > 0) {
+    const html = authView.renderLoginPage({
+      values,
+      errors,
+      fieldErrors,
+      currentUser: req && req.user ? req.user : null
+    });
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(400).send(html);
+  }
+
+  try {
+    const user = await userModel.getUserByEmail(parsedData.email);
+    const isValid = Boolean(
+      user &&
+      typeof user.password_hash === 'string' &&
+      user.password_hash.length > 0 &&
+      (await verifyPassword(parsedData.password, user.password_hash))
+    );
+
+    if (!isValid) {
+      const invalidMsg = 'Invalid email or password.';
+      const html = authView.renderLoginPage({
+        values,
+        errors: [invalidMsg],
+        currentUser: null
+      });
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(401).send(html);
+    }
+
+    if (!req.session || typeof req.session.regenerate !== 'function') {
+      return next(new Error('Session middleware is not configured.'));
+    }
+
+    return req.session.regenerate((regenErr) => {
+      if (regenErr) {
+        return next(regenErr);
+      }
+
+      // Store only the minimum required user identity in the session
+      req.session.userId = user.id;
+
+      return req.session.save((saveErr) => {
+        if (saveErr) {
+          return next(saveErr);
+        }
+        return res.redirect(303, '/');
+      });
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * POST /logout
+ * Destroys the active session in MySQL, clears the session cookie, and redirects to /login.
+ */
+const logout = (req, res, next) => {
+  const finishLogout = () => {
+    res.clearCookie(SESSION_COOKIE_NAME, getSessionCookieOptions());
+    return res.redirect(303, '/login?loggedOut=1');
+  };
+
+  if (req.session && typeof req.session.destroy === 'function') {
+    return req.session.destroy((err) => {
+      if (err) {
+        return next(err);
+      }
+      return finishLogout();
+    });
+  }
+
+  return finishLogout();
+};
+
 module.exports = {
   ALLOWED_ROLES,
   validateRegistrationInput,
+  validateLoginInput,
   showRegisterPage,
-  register
+  register,
+  showLoginPage,
+  login,
+  logout
 };
