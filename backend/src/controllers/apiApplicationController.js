@@ -72,6 +72,9 @@ const createApplication = async (req, res) => {
     const newApplication = await applicationModel.createApplication(body);
     res.status(201).json(newApplication);
   } catch (error) {
+    if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
+      return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
@@ -113,6 +116,9 @@ const updateApplication = async (req, res) => {
 
     res.status(200).json(updatedApplication);
   } catch (error) {
+    if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
+      return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
@@ -146,6 +152,9 @@ const patchApplication = async (req, res) => {
 
     res.status(200).json(updatedApplication);
   } catch (error) {
+    if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
+      return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
@@ -245,6 +254,9 @@ const createApplicationForJobPosting = async (req, res) => {
     const newApplication = await applicationModel.createApplication(applicationPayload);
     res.status(201).json(newApplication);
   } catch (error) {
+    if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
+      return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };

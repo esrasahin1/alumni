@@ -46,6 +46,28 @@ const getAllApplications = async () => {
 };
 
 /**
+ * Returns all applications joined with their job posting title & company for the Admin Panel.
+ * Preserves public getAllApplications() shape separately.
+ * @returns {Promise<Array>}
+ */
+const getAllApplicationsWithJobDetails = async () => {
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    `SELECT a.id, a.job_posting_id, a.user_id, a.applicant_name, a.applicant_email,
+            a.resume_url, a.cover_letter, a.status, a.created_at, a.updated_at,
+            jp.title AS job_title, jp.company AS job_company
+     FROM applications a
+     LEFT JOIN job_postings jp ON a.job_posting_id = jp.id
+     ORDER BY a.id DESC`
+  );
+  return rows.map((row) => ({
+    ...formatApplication(row),
+    job_title: row.job_title || null,
+    job_company: row.job_company || null
+  }));
+};
+
+/**
  * Finds a single application by ID.
  * @param {number|string} id - Application ID
  * @returns {Promise<Object|null>} Application object or null if not found
@@ -81,8 +103,20 @@ const getApplicationsByJobPostingId = async (jobPostingId) => {
   return rows.map(formatApplication);
 };
 
+const ALLOWED_APPLICATION_STATUSES = ['PENDING', 'REVIEWING', 'ACCEPTED', 'REJECTED'];
+
+const createApplicationError = (code, message, statusCode = 400) => {
+  const err = new Error(message);
+  err.code = code;
+  err.statusCode = statusCode;
+  return err;
+};
+
 /**
- * Creates a new application in MySQL.
+ * Creates a new application in MySQL inside a transaction.
+ * Locks the target job_postings row with FOR SHARE before inserting so concurrent
+ * job posting deletion cannot create orphaned applications.
+ * Preserves guest applications (user_id = NULL) and all existing response fields.
  * @param {Object} applicationData - Application data
  * @returns {Promise<Object>} Created application object
  */
@@ -90,7 +124,7 @@ const createApplication = async (applicationData = {}) => {
   const data = applicationData || {};
 
   const rawJobPostingId = data.job_posting_id !== undefined ? data.job_posting_id : data.jobPostingId;
-  const jobPostingId = rawJobPostingId !== undefined && rawJobPostingId !== null && !isNaN(Number(rawJobPostingId))
+  const jobPostingId = rawJobPostingId !== undefined && rawJobPostingId !== null && rawJobPostingId !== '' && !isNaN(Number(rawJobPostingId))
     ? Number(rawJobPostingId)
     : 0;
 
@@ -118,16 +152,52 @@ const createApplication = async (applicationData = {}) => {
     : 'PENDING';
 
   const pool = await getPool();
-  const [result] = await pool.query(
-    'INSERT INTO applications (job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [jobPostingId, userId, applicantName, applicantEmail, resumeUrl, coverLetter, status]
-  );
+  const connection = await pool.getConnection();
 
-  return await getApplicationById(result.insertId);
+  try {
+    await connection.beginTransaction();
+
+    if (!Number.isInteger(jobPostingId) || jobPostingId <= 0) {
+      await connection.rollback();
+      throw createApplicationError('JOB_POSTING_NOT_FOUND', 'Belirtilen iş ilanı bulunamadı', 404);
+    }
+
+    const [jobRows] = await connection.query(
+      'SELECT id FROM job_postings WHERE id = ? LIMIT 1 FOR SHARE',
+      [jobPostingId]
+    );
+    if (jobRows.length === 0) {
+      await connection.rollback();
+      throw createApplicationError('JOB_POSTING_NOT_FOUND', 'Belirtilen iş ilanı bulunamadı', 404);
+    }
+
+    const [result] = await connection.query(
+      'INSERT INTO applications (job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [jobPostingId, userId, applicantName, applicantEmail, resumeUrl, coverLetter, status]
+    );
+
+    const [createdRows] = await connection.query(
+      'SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications WHERE id = ? LIMIT 1',
+      [result.insertId]
+    );
+    await connection.commit();
+    return createdRows.length > 0 ? formatApplication(createdRows[0]) : null;
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch (_) {
+      // Ignore rollback failure when transaction already ended
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 /**
- * Updates an application by ID in MySQL (full PUT or partial PATCH).
+ * Updates an application by ID in MySQL (full PUT or partial PATCH) inside a transaction.
+ * Locks the target job_postings row (FOR SHARE) before locking applications (FOR UPDATE)
+ * when job_posting_id is supplied/changed so concurrent job deletion stays deadlock-free.
  * @param {number|string} id - Application ID
  * @param {Object} applicationData - New application data
  * @param {boolean} [isPartial=false] - Partial update flag
@@ -138,92 +208,137 @@ const updateApplication = async (id, applicationData = {}, isPartial = false) =>
     return null;
   }
   const applicationId = Number(id);
-  const existingApplication = await getApplicationById(applicationId);
-
-  if (!existingApplication) {
-    return null;
-  }
-
   const data = applicationData || {};
-  let updatedJobPostingId = existingApplication.job_posting_id;
-  let updatedUserId = existingApplication.user_id;
-  let updatedApplicantName = existingApplication.applicant_name;
-  let updatedApplicantEmail = existingApplication.applicant_email;
-  let updatedResumeUrl = existingApplication.resume_url;
-  let updatedCoverLetter = existingApplication.cover_letter;
-  let updatedStatus = existingApplication.status;
 
-  if (isPartial) {
-    if (data.job_posting_id !== undefined || data.jobPostingId !== undefined) {
-      const val = data.job_posting_id !== undefined ? data.job_posting_id : data.jobPostingId;
-      if (val !== null && val !== '' && !isNaN(Number(val))) {
-        updatedJobPostingId = Number(val);
-      }
-    }
-    if (data.user_id !== undefined || data.userId !== undefined) {
-      const val = data.user_id !== undefined ? data.user_id : data.userId;
-      updatedUserId = (val !== null && val !== '' && !isNaN(Number(val))) ? Number(val) : null;
-    }
-    if (data.applicant_name !== undefined) {
-      updatedApplicantName = String(data.applicant_name);
-    } else if (data.applicantName !== undefined) {
-      updatedApplicantName = String(data.applicantName);
-    }
-    if (data.applicant_email !== undefined) {
-      updatedApplicantEmail = String(data.applicant_email);
-    } else if (data.applicantEmail !== undefined) {
-      updatedApplicantEmail = String(data.applicantEmail);
-    }
-    if (data.resume_url !== undefined) {
-      updatedResumeUrl = data.resume_url !== null ? String(data.resume_url) : null;
-    } else if (data.resumeUrl !== undefined) {
-      updatedResumeUrl = data.resumeUrl !== null ? String(data.resumeUrl) : null;
-    }
-    if (data.cover_letter !== undefined) {
-      updatedCoverLetter = data.cover_letter !== null ? String(data.cover_letter) : null;
-    } else if (data.coverLetter !== undefined) {
-      updatedCoverLetter = data.coverLetter !== null ? String(data.coverLetter) : null;
-    }
-    if (data.status !== undefined && data.status !== null && String(data.status).trim() !== '') {
-      updatedStatus = String(data.status).trim();
-    }
-  } else {
-    const rawJobPostingId = data.job_posting_id !== undefined ? data.job_posting_id : data.jobPostingId;
-    updatedJobPostingId = rawJobPostingId !== undefined && rawJobPostingId !== null && !isNaN(Number(rawJobPostingId))
-      ? Number(rawJobPostingId)
-      : 0;
-
-    const rawUserId = data.user_id !== undefined ? data.user_id : data.userId;
-    updatedUserId = rawUserId !== undefined && rawUserId !== null && rawUserId !== '' && !isNaN(Number(rawUserId))
-      ? Number(rawUserId)
-      : null;
-
-    updatedApplicantName = data.applicant_name !== undefined
-      ? String(data.applicant_name)
-      : (data.applicantName !== undefined ? String(data.applicantName) : '');
-
-    updatedApplicantEmail = data.applicant_email !== undefined
-      ? String(data.applicant_email)
-      : (data.applicantEmail !== undefined ? String(data.applicantEmail) : '');
-
-    const rawResumeUrl = data.resume_url !== undefined ? data.resume_url : data.resumeUrl;
-    updatedResumeUrl = rawResumeUrl !== undefined && rawResumeUrl !== null ? String(rawResumeUrl) : null;
-
-    const rawCoverLetter = data.cover_letter !== undefined ? data.cover_letter : data.coverLetter;
-    updatedCoverLetter = rawCoverLetter !== undefined && rawCoverLetter !== null ? String(rawCoverLetter) : null;
-
-    updatedStatus = data.status !== undefined && data.status !== null && String(data.status).trim() !== ''
-      ? String(data.status).trim()
-      : 'PENDING';
-  }
+  const hasJobPostingInput =
+    !isPartial || data.job_posting_id !== undefined || data.jobPostingId !== undefined;
+  const rawJobPostingId = data.job_posting_id !== undefined ? data.job_posting_id : data.jobPostingId;
 
   const pool = await getPool();
-  await pool.query(
-    'UPDATE applications SET job_posting_id = ?, user_id = ?, applicant_name = ?, applicant_email = ?, resume_url = ?, cover_letter = ?, status = ? WHERE id = ?',
-    [updatedJobPostingId, updatedUserId, updatedApplicantName, updatedApplicantEmail, updatedResumeUrl, updatedCoverLetter, updatedStatus, applicationId]
-  );
+  const connection = await pool.getConnection();
 
-  return await getApplicationById(applicationId);
+  try {
+    await connection.beginTransaction();
+
+    let requestedJobPostingId = null;
+    if (hasJobPostingInput) {
+      requestedJobPostingId =
+        rawJobPostingId !== undefined && rawJobPostingId !== null && rawJobPostingId !== '' && !isNaN(Number(rawJobPostingId))
+          ? Number(rawJobPostingId)
+          : 0;
+
+      if (!Number.isInteger(requestedJobPostingId) || requestedJobPostingId <= 0) {
+        await connection.rollback();
+        throw createApplicationError('JOB_POSTING_NOT_FOUND', 'Belirtilen iş ilanı bulunamadı', 404);
+      }
+
+      const [jobRows] = await connection.query(
+        'SELECT id FROM job_postings WHERE id = ? LIMIT 1 FOR SHARE',
+        [requestedJobPostingId]
+      );
+      if (jobRows.length === 0) {
+        await connection.rollback();
+        throw createApplicationError('JOB_POSTING_NOT_FOUND', 'Belirtilen iş ilanı bulunamadı', 404);
+      }
+    }
+
+    const [existingRows] = await connection.query(
+      'SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications WHERE id = ? LIMIT 1 FOR UPDATE',
+      [applicationId]
+    );
+    if (existingRows.length === 0) {
+      await connection.rollback();
+      return null;
+    }
+
+    const existingApplication = formatApplication(existingRows[0]);
+    let updatedJobPostingId = existingApplication.job_posting_id;
+    let updatedUserId = existingApplication.user_id;
+    let updatedApplicantName = existingApplication.applicant_name;
+    let updatedApplicantEmail = existingApplication.applicant_email;
+    let updatedResumeUrl = existingApplication.resume_url;
+    let updatedCoverLetter = existingApplication.cover_letter;
+    let updatedStatus = existingApplication.status;
+
+    if (isPartial) {
+      if (hasJobPostingInput) {
+        updatedJobPostingId = requestedJobPostingId;
+      }
+      if (data.user_id !== undefined || data.userId !== undefined) {
+        const val = data.user_id !== undefined ? data.user_id : data.userId;
+        updatedUserId = (val !== null && val !== '' && !isNaN(Number(val))) ? Number(val) : null;
+      }
+      if (data.applicant_name !== undefined) {
+        updatedApplicantName = String(data.applicant_name);
+      } else if (data.applicantName !== undefined) {
+        updatedApplicantName = String(data.applicantName);
+      }
+      if (data.applicant_email !== undefined) {
+        updatedApplicantEmail = String(data.applicant_email);
+      } else if (data.applicantEmail !== undefined) {
+        updatedApplicantEmail = String(data.applicantEmail);
+      }
+      if (data.resume_url !== undefined) {
+        updatedResumeUrl = data.resume_url !== null ? String(data.resume_url) : null;
+      } else if (data.resumeUrl !== undefined) {
+        updatedResumeUrl = data.resumeUrl !== null ? String(data.resumeUrl) : null;
+      }
+      if (data.cover_letter !== undefined) {
+        updatedCoverLetter = data.cover_letter !== null ? String(data.cover_letter) : null;
+      } else if (data.coverLetter !== undefined) {
+        updatedCoverLetter = data.coverLetter !== null ? String(data.coverLetter) : null;
+      }
+      if (data.status !== undefined && data.status !== null && String(data.status).trim() !== '') {
+        updatedStatus = String(data.status).trim();
+      }
+    } else {
+      updatedJobPostingId = requestedJobPostingId;
+
+      const rawUserId = data.user_id !== undefined ? data.user_id : data.userId;
+      updatedUserId = rawUserId !== undefined && rawUserId !== null && rawUserId !== '' && !isNaN(Number(rawUserId))
+        ? Number(rawUserId)
+        : null;
+
+      updatedApplicantName = data.applicant_name !== undefined
+        ? String(data.applicant_name)
+        : (data.applicantName !== undefined ? String(data.applicantName) : '');
+
+      updatedApplicantEmail = data.applicant_email !== undefined
+        ? String(data.applicant_email)
+        : (data.applicantEmail !== undefined ? String(data.applicantEmail) : '');
+
+      const rawResumeUrl = data.resume_url !== undefined ? data.resume_url : data.resumeUrl;
+      updatedResumeUrl = rawResumeUrl !== undefined && rawResumeUrl !== null ? String(rawResumeUrl) : null;
+
+      const rawCoverLetter = data.cover_letter !== undefined ? data.cover_letter : data.coverLetter;
+      updatedCoverLetter = rawCoverLetter !== undefined && rawCoverLetter !== null ? String(rawCoverLetter) : null;
+
+      updatedStatus = data.status !== undefined && data.status !== null && String(data.status).trim() !== ''
+        ? String(data.status).trim()
+        : 'PENDING';
+    }
+
+    await connection.query(
+      'UPDATE applications SET job_posting_id = ?, user_id = ?, applicant_name = ?, applicant_email = ?, resume_url = ?, cover_letter = ?, status = ? WHERE id = ?',
+      [updatedJobPostingId, updatedUserId, updatedApplicantName, updatedApplicantEmail, updatedResumeUrl, updatedCoverLetter, updatedStatus, applicationId]
+    );
+
+    const [updatedRows] = await connection.query(
+      'SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications WHERE id = ? LIMIT 1',
+      [applicationId]
+    );
+    await connection.commit();
+    return updatedRows.length > 0 ? formatApplication(updatedRows[0]) : null;
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch (_) {
+      // Ignore rollback failure when transaction already ended
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 /**
@@ -254,12 +369,33 @@ const deleteApplication = async (id) => {
   return result.affectedRows > 0;
 };
 
+/**
+ * Counts how many applications reference a specific job posting.
+ * Used to block deleting job postings that have existing applications.
+ * @param {number|string} jobPostingId
+ * @returns {Promise<number>}
+ */
+const countApplicationsByJobPostingId = async (jobPostingId) => {
+  if (jobPostingId === undefined || jobPostingId === null || jobPostingId === '' || isNaN(Number(jobPostingId))) {
+    return 0;
+  }
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS count FROM applications WHERE job_posting_id = ?',
+    [Number(jobPostingId)]
+  );
+  return Number(rows[0]?.count || 0);
+};
+
 module.exports = {
   applications,
+  ALLOWED_APPLICATION_STATUSES,
   formatApplication,
   getAllApplications,
+  getAllApplicationsWithJobDetails,
   getApplicationById,
   getApplicationsByJobPostingId,
+  countApplicationsByJobPostingId,
   createApplication,
   updateApplication,
   patchApplication,

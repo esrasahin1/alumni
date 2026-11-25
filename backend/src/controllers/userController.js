@@ -98,7 +98,7 @@ const updateUser = async (req, res) => {
       if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(req.params.id);
+      const html = userView.renderUserNotFoundPage(req.params.id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
@@ -133,7 +133,7 @@ const patchUser = async (req, res) => {
       if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(req.params.id);
+      const html = userView.renderUserNotFoundPage(req.params.id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
@@ -168,7 +168,7 @@ const deleteUser = async (req, res) => {
       if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(req.params.id);
+      const html = userView.renderUserNotFoundPage(req.params.id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
@@ -181,6 +181,12 @@ const deleteUser = async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (error) {
+    if (error && error.code === 'CANNOT_DELETE_LAST_ADMIN') {
+      if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(409).json({ success: false, message: error.message });
+      }
+      return res.status(409).send(error.message);
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };
@@ -196,7 +202,7 @@ const getUserJobs = async (req, res) => {
       if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(id);
+      const html = userView.renderUserNotFoundPage(id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
@@ -206,7 +212,7 @@ const getUserJobs = async (req, res) => {
       if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(id);
+      const html = userView.renderUserNotFoundPage(id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
@@ -217,7 +223,7 @@ const getUserJobs = async (req, res) => {
       if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(id);
+      const html = userView.renderUserNotFoundPage(id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
@@ -228,7 +234,7 @@ const getUserJobs = async (req, res) => {
     }
 
     // Web tarayıcıları ve varsayılan: Full Midnight HTML sayfası
-    const html = userJobsView.renderUserJobsPage(user, jobPostings);
+    const html = userJobsView.renderUserJobsPage(user, jobPostings, req.user || null);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(html);
   } catch (error) {

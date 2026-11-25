@@ -32,7 +32,7 @@ const getAnnouncements = async (req, res) => {
     // View katmanı mevcutsa şablonu render et
     const view = getAnnouncementView();
     if (view && typeof view.renderAnnouncementsPage === 'function') {
-      const html = view.renderAnnouncementsPage(announcements);
+      const html = view.renderAnnouncementsPage(announcements, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -58,7 +58,7 @@ const getAnnouncement = async (req, res) => {
       }
       const view = getAnnouncementView();
       if (view && typeof view.renderAnnouncementNotFoundPage === 'function') {
-        const html = view.renderAnnouncementNotFoundPage(id);
+        const html = view.renderAnnouncementNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(html);
       }
@@ -74,7 +74,7 @@ const getAnnouncement = async (req, res) => {
       }
       const view = getAnnouncementView();
       if (view && typeof view.renderAnnouncementNotFoundPage === 'function') {
-        const html = view.renderAnnouncementNotFoundPage(id);
+        const html = view.renderAnnouncementNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(html);
       }
@@ -88,7 +88,7 @@ const getAnnouncement = async (req, res) => {
 
     const view = getAnnouncementView();
     if (view && typeof view.renderAnnouncementDetailPage === 'function') {
-      const html = view.renderAnnouncementDetailPage(announcement);
+      const html = view.renderAnnouncementDetailPage(announcement, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -114,7 +114,7 @@ const createAnnouncement = async (req, res) => {
 
     const view = getAnnouncementView();
     if (view && typeof view.renderAnnouncementCreatedPage === 'function') {
-      const html = view.renderAnnouncementCreatedPage(newAnnouncement);
+      const html = view.renderAnnouncementCreatedPage(newAnnouncement, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(201).send(html);
     }
@@ -140,7 +140,7 @@ const updateAnnouncement = async (req, res) => {
       }
       const view = getAnnouncementView();
       if (view && typeof view.renderAnnouncementNotFoundPage === 'function') {
-        const html = view.renderAnnouncementNotFoundPage(id);
+        const html = view.renderAnnouncementNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(html);
       }
@@ -156,7 +156,7 @@ const updateAnnouncement = async (req, res) => {
       }
       const view = getAnnouncementView();
       if (view && typeof view.renderAnnouncementNotFoundPage === 'function') {
-        const html = view.renderAnnouncementNotFoundPage(id);
+        const html = view.renderAnnouncementNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(html);
       }
@@ -170,7 +170,7 @@ const updateAnnouncement = async (req, res) => {
 
     const view = getAnnouncementView();
     if (view && typeof view.renderAnnouncementUpdatedPage === 'function') {
-      const html = view.renderAnnouncementUpdatedPage(updatedAnnouncement, { isPartial: false });
+      const html = view.renderAnnouncementUpdatedPage(updatedAnnouncement, { isPartial: false, currentUser: req && req.user ? req.user : null });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -196,7 +196,7 @@ const patchAnnouncement = async (req, res) => {
       }
       const view = getAnnouncementView();
       if (view && typeof view.renderAnnouncementNotFoundPage === 'function') {
-        const html = view.renderAnnouncementNotFoundPage(id);
+        const html = view.renderAnnouncementNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(html);
       }
@@ -212,7 +212,7 @@ const patchAnnouncement = async (req, res) => {
       }
       const view = getAnnouncementView();
       if (view && typeof view.renderAnnouncementNotFoundPage === 'function') {
-        const html = view.renderAnnouncementNotFoundPage(id);
+        const html = view.renderAnnouncementNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(html);
       }
@@ -226,7 +226,7 @@ const patchAnnouncement = async (req, res) => {
 
     const view = getAnnouncementView();
     if (view && typeof view.renderAnnouncementUpdatedPage === 'function') {
-      const html = view.renderAnnouncementUpdatedPage(updatedAnnouncement, { isPartial: true });
+      const html = view.renderAnnouncementUpdatedPage(updatedAnnouncement, { isPartial: true, currentUser: req && req.user ? req.user : null });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -252,7 +252,7 @@ const deleteAnnouncement = async (req, res) => {
       }
       const view = getAnnouncementView();
       if (view && typeof view.renderAnnouncementNotFoundPage === 'function') {
-        const html = view.renderAnnouncementNotFoundPage(id);
+        const html = view.renderAnnouncementNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(html);
       }
@@ -268,7 +268,7 @@ const deleteAnnouncement = async (req, res) => {
       }
       const view = getAnnouncementView();
       if (view && typeof view.renderAnnouncementNotFoundPage === 'function') {
-        const html = view.renderAnnouncementNotFoundPage(id);
+        const html = view.renderAnnouncementNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(html);
       }
@@ -282,7 +282,7 @@ const deleteAnnouncement = async (req, res) => {
 
     const view = getAnnouncementView();
     if (view && typeof view.renderAnnouncementDeletedPage === 'function') {
-      const html = view.renderAnnouncementDeletedPage(id);
+      const html = view.renderAnnouncementDeletedPage(id, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }

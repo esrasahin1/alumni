@@ -32,7 +32,7 @@ const getJobPostings = async (req, res) => {
     // View katmanı mevcutsa şablonu render et
     const view = getJobPostingView();
     if (view && typeof view.renderJobPostingsPage === 'function') {
-      const html = view.renderJobPostingsPage(jobPostings);
+      const html = view.renderJobPostingsPage(jobPostings, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -58,7 +58,7 @@ const getJobPosting = async (req, res) => {
       }
       const view = getJobPostingView();
       if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
-        const html = view.renderJobPostingNotFoundPage(id);
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(html);
       }
@@ -74,7 +74,7 @@ const getJobPosting = async (req, res) => {
       }
       const view = getJobPostingView();
       if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
-        const html = view.renderJobPostingNotFoundPage(id);
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(html);
       }
@@ -88,7 +88,7 @@ const getJobPosting = async (req, res) => {
 
     const view = getJobPostingView();
     if (view && typeof view.renderJobPostingDetailPage === 'function') {
-      const html = view.renderJobPostingDetailPage(jobPosting);
+      const html = view.renderJobPostingDetailPage(jobPosting, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -134,7 +134,7 @@ const createJobPosting = async (req, res) => {
 
     const view = getJobPostingView();
     if (view && typeof view.renderJobPostingCreatedPage === 'function') {
-      const html = view.renderJobPostingCreatedPage(newJobPosting);
+      const html = view.renderJobPostingCreatedPage(newJobPosting, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(201).send(html);
     }
@@ -174,7 +174,7 @@ const updateJobPosting = async (req, res) => {
       }
       const view = getJobPostingView();
       if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
-        const html = view.renderJobPostingNotFoundPage(id);
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(html);
       }
@@ -210,7 +210,7 @@ const updateJobPosting = async (req, res) => {
       }
       const view = getJobPostingView();
       if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
-        const html = view.renderJobPostingNotFoundPage(id);
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(html);
       }
@@ -224,7 +224,7 @@ const updateJobPosting = async (req, res) => {
 
     const view = getJobPostingView();
     if (view && typeof view.renderJobPostingUpdatedPage === 'function') {
-      const html = view.renderJobPostingUpdatedPage(updatedJobPosting, { isPartial: false });
+      const html = view.renderJobPostingUpdatedPage(updatedJobPosting, { isPartial: false, currentUser: req && req.user ? req.user : null });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -264,7 +264,7 @@ const patchJobPosting = async (req, res) => {
       }
       const view = getJobPostingView();
       if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
-        const html = view.renderJobPostingNotFoundPage(id);
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(html);
       }
@@ -299,7 +299,7 @@ const patchJobPosting = async (req, res) => {
       }
       const view = getJobPostingView();
       if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
-        const html = view.renderJobPostingNotFoundPage(id);
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(html);
       }
@@ -313,7 +313,7 @@ const patchJobPosting = async (req, res) => {
 
     const view = getJobPostingView();
     if (view && typeof view.renderJobPostingUpdatedPage === 'function') {
-      const html = view.renderJobPostingUpdatedPage(updatedJobPosting, { isPartial: true });
+      const html = view.renderJobPostingUpdatedPage(updatedJobPosting, { isPartial: true, currentUser: req && req.user ? req.user : null });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -353,7 +353,7 @@ const deleteJobPosting = async (req, res) => {
       }
       const view = getJobPostingView();
       if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
-        const html = view.renderJobPostingNotFoundPage(id);
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(html);
       }
@@ -369,7 +369,7 @@ const deleteJobPosting = async (req, res) => {
       }
       const view = getJobPostingView();
       if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
-        const html = view.renderJobPostingNotFoundPage(id);
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(html);
       }
@@ -383,7 +383,7 @@ const deleteJobPosting = async (req, res) => {
 
     const view = getJobPostingView();
     if (view && typeof view.renderJobPostingDeletedPage === 'function') {
-      const html = view.renderJobPostingDeletedPage(id);
+      const html = view.renderJobPostingDeletedPage(id, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -391,6 +391,13 @@ const deleteJobPosting = async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Silindi</title></head><body><h1>İş İlanı Başarıyla Silindi</h1><p>ID: ${id}</p></body></html>`);
   } catch (error) {
+    if (error && error.code === 'JOB_HAS_APPLICATIONS') {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(409).json({ success: false, message: error.message });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(409).send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>409 Conflict</title></head><body><h1>409 Conflict</h1><p>${error.message}</p><a href="/job-postings">Back to Job Postings</a></body></html>`);
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };

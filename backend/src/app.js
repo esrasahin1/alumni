@@ -11,6 +11,8 @@ const jobPostingRoutes = require('./routes/jobPostingRoutes');
 const apiJobPostingRoutes = require('./routes/apiJobPostingRoutes');
 const applicationRoutes = require('./routes/applicationRoutes');
 const apiApplicationRoutes = require('./routes/apiApplicationRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const apiAdminRoutes = require('./routes/apiAdminRoutes');
 const applicationController = require('./controllers/applicationController');
 const apiApplicationController = require('./controllers/apiApplicationController');
 const loggerMiddleware = require('./middlewares/loggerMiddleware');
@@ -63,7 +65,7 @@ app.get('/sum/:number1/:number2', (req, res) => {
 // 5. GET /about → About Page
 app.get('/about', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(renderAboutPage());
+  res.send(renderAboutPage(req.user || null));
 });
 
 // Rotalar
@@ -85,6 +87,10 @@ app.post('/api/job-postings/:jobPostingId/applications', apiApplicationControlle
 // Direct Application routes
 app.use('/applications', applicationRoutes);
 app.use('/api/applications', apiApplicationRoutes);
+
+// Admin Panel & Admin API routes (protected by requireAuth + requireAdmin)
+app.use('/admin', adminRoutes);
+app.use('/api/admin', apiAdminRoutes);
 app.get('/ok', (req, res) => res.status(200).send('ok'));
 
 // GET /api/health → JSON formatında { "status": "ok" } cevabı döner
@@ -1682,6 +1688,440 @@ const swaggerDocument = {
             }
           }
         }
+      }
+    },
+    "/api/admin/summary": {
+      get: {
+        tags: ["Admin"],
+        summary: "Admin dashboard summary counts",
+        description: "Requires an authenticated session with auth_role = 'admin'. Returns aggregate counts for users, admins, announcements, job postings, and applications.",
+        responses: {
+          "200": {
+            description: "Dashboard summary counts",
+            content: {
+              "application/json": {
+                example: { success: true, data: { users: 9, admins: 1, announcements: 5, jobPostings: 7, applications: 1, pendingApplications: 1 } }
+              }
+            }
+          },
+          "401": { description: "Authentication required", content: { "application/json": { example: { success: false, message: "Unauthorized" } } } },
+          "403": { description: "Administrator access required", content: { "application/json": { example: { success: false, message: "Forbidden: Administrator access required." } } } }
+        }
+      }
+    },
+    "/api/admin/users": {
+      get: {
+        tags: ["Admin"],
+        summary: "List all users (Admin)",
+        description: "Requires admin role. Never returns password_hash.",
+        responses: {
+          "200": {
+            description: "User list returned",
+            content: {
+              "application/json": {
+                example: { success: true, data: [{ id: 1, name: "Jane Doe", email: "jane@example.com", role: "alumni", auth_role: "user", department: "CS", graduation_year: 2022 }] }
+              }
+            }
+          },
+          "401": { description: "Authentication required" },
+          "403": { description: "Administrator access required" }
+        }
+      },
+      post: {
+        tags: ["Admin"],
+        summary: "Create user (Admin; single-admin limit enforced)",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name", "email", "password"],
+                properties: {
+                  name: { type: "string", maxLength: 255 },
+                  email: { type: "string", format: "email", maxLength: 255 },
+                  password: { type: "string", minLength: 8, maxLength: 128 },
+                  role: { type: "string", enum: ["student", "alumni"], nullable: true },
+                  auth_role: { type: "string", enum: ["user", "admin"], default: "user" },
+                  department: { type: "string", maxLength: 150, nullable: true },
+                  graduation_year: { type: "integer", minimum: 1950, nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "201": { description: "User created", content: { "application/json": { example: { success: true, data: { id: 10, name: "New User", email: "new@example.com", role: "student", auth_role: "user" } } } } },
+          "400": { description: "Validation failed", content: { "application/json": { example: { success: false, message: "Validation failed.", errors: { email: "Email is required." } } } } },
+          "401": { description: "Authentication required" },
+          "403": { description: "Administrator access required" },
+          "409": { description: "Duplicate email or second admin rejected (single-admin policy)" }
+        }
+      }
+    },
+    "/api/admin/users/{id}": {
+      get: {
+        tags: ["Admin"],
+        summary: "Get single user details (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: {
+          "200": { description: "User found" },
+          "400": { description: "Invalid user ID" },
+          "401": { description: "Unauthorized" },
+          "403": { description: "Forbidden" },
+          "404": { description: "User not found" }
+        }
+      },
+      put: {
+        tags: ["Admin"],
+        summary: "Update user including optional password reset (Admin; single-admin guard enforced)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name", "email", "auth_role"],
+                properties: {
+                  name: { type: "string", maxLength: 255 },
+                  email: { type: "string", format: "email", maxLength: 255 },
+                  password: { type: "string", minLength: 8, maxLength: 128 },
+                  role: { type: "string", enum: ["student", "alumni"], nullable: true },
+                  auth_role: { type: "string", enum: ["user", "admin"] },
+                  department: { type: "string", maxLength: 150, nullable: true },
+                  graduation_year: { type: "integer", minimum: 1950, nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": { description: "User updated" },
+          "400": { description: "Invalid ID or validation failed" },
+          "401": { description: "Unauthorized" },
+          "403": { description: "Forbidden" },
+          "404": { description: "User not found" },
+          "409": { description: "Sole admin demotion, second admin creation, or duplicate email blocked" }
+        }
+      },
+      patch: {
+        tags: ["Admin"],
+        summary: "Partially update user (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string", maxLength: 255 },
+                  email: { type: "string", format: "email", maxLength: 255 },
+                  password: { type: "string", minLength: 8, maxLength: 128 },
+                  role: { type: "string", enum: ["student", "alumni"], nullable: true },
+                  auth_role: { type: "string", enum: ["user", "admin"] },
+                  department: { type: "string", maxLength: 150, nullable: true },
+                  graduation_year: { type: "integer", minimum: 1950, nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": { description: "User updated" },
+          "400": { description: "Invalid ID or validation failed" },
+          "401": { description: "Unauthorized" },
+          "403": { description: "Forbidden" },
+          "404": { description: "User not found" },
+          "409": { description: "Conflict (sole admin demotion, single-admin violation, or duplicate email)" }
+        }
+      },
+      delete: {
+        tags: ["Admin"],
+        summary: "Safely delete user (detaches applications, blocks sole admin deletion)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: {
+          "200": { description: "User deleted", content: { "application/json": { example: { success: true, message: "User deleted successfully.", detachedApplicationsCount: 0 } } } },
+          "400": { description: "Invalid user ID" },
+          "401": { description: "Unauthorized" },
+          "403": { description: "Forbidden" },
+          "404": { description: "User not found" },
+          "409": { description: "Cannot delete the sole administrator account" }
+        }
+      }
+    },
+    "/api/admin/announcements": {
+      get: {
+        tags: ["Admin"],
+        summary: "List announcements (Admin)",
+        responses: { "200": { description: "Announcement list returned" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" } }
+      },
+      post: {
+        tags: ["Admin"],
+        summary: "Create announcement (Admin)",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["title", "content"],
+                properties: {
+                  title: { type: "string", maxLength: 255 },
+                  content: { type: "string" }
+                }
+              }
+            }
+          }
+        },
+        responses: { "201": { description: "Announcement created" }, "400": { description: "Validation failed" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" } }
+      }
+    },
+    "/api/admin/announcements/{id}": {
+      get: {
+        tags: ["Admin"],
+        summary: "Get announcement by ID (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: { "200": { description: "Announcement found" }, "400": { description: "Invalid ID" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      },
+      put: {
+        tags: ["Admin"],
+        summary: "Update announcement (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["title", "content"],
+                properties: {
+                  title: { type: "string", maxLength: 255 },
+                  content: { type: "string" }
+                }
+              }
+            }
+          }
+        },
+        responses: { "200": { description: "Announcement updated" }, "400": { description: "Validation failed" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      },
+      patch: {
+        tags: ["Admin"],
+        summary: "Patch announcement (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", maxLength: 255 },
+                  content: { type: "string" }
+                }
+              }
+            }
+          }
+        },
+        responses: { "200": { description: "Announcement updated" }, "400": { description: "Validation failed" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      },
+      delete: {
+        tags: ["Admin"],
+        summary: "Delete announcement (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: { "200": { description: "Announcement deleted" }, "400": { description: "Invalid ID" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      }
+    },
+    "/api/admin/job-postings": {
+      get: {
+        tags: ["Admin"],
+        summary: "List job postings (Admin)",
+        responses: { "200": { description: "Job postings list returned" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" } }
+      },
+      post: {
+        tags: ["Admin"],
+        summary: "Create job posting (Admin)",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["title", "company"],
+                properties: {
+                  title: { type: "string", maxLength: 120 },
+                  company: { type: "string", maxLength: 255 },
+                  location: { type: "string", maxLength: 255, nullable: true },
+                  description: { type: "string", nullable: true },
+                  contact_email: { type: "string", format: "email", maxLength: 255, nullable: true },
+                  user_id: { type: "integer", nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: { "201": { description: "Job posting created" }, "400": { description: "Validation failed" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" } }
+      }
+    },
+    "/api/admin/job-postings/{id}": {
+      get: {
+        tags: ["Admin"],
+        summary: "Get job posting by ID (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: { "200": { description: "Job posting found" }, "400": { description: "Invalid ID" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      },
+      put: {
+        tags: ["Admin"],
+        summary: "Update job posting (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["title", "company"],
+                properties: {
+                  title: { type: "string", maxLength: 120 },
+                  company: { type: "string", maxLength: 255 },
+                  location: { type: "string", maxLength: 255, nullable: true },
+                  description: { type: "string", nullable: true },
+                  contact_email: { type: "string", format: "email", maxLength: 255, nullable: true },
+                  user_id: { type: "integer", nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: { "200": { description: "Job posting updated" }, "400": { description: "Validation failed" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      },
+      patch: {
+        tags: ["Admin"],
+        summary: "Patch job posting (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", maxLength: 120 },
+                  company: { type: "string", maxLength: 255 },
+                  location: { type: "string", maxLength: 255, nullable: true },
+                  description: { type: "string", nullable: true },
+                  contact_email: { type: "string", format: "email", maxLength: 255, nullable: true },
+                  user_id: { type: "integer", nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: { "200": { description: "Job posting updated" }, "400": { description: "Validation failed" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      },
+      delete: {
+        tags: ["Admin"],
+        summary: "Delete job posting (transactionally blocked if applications exist)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: { "200": { description: "Deleted" }, "400": { description: "Invalid ID" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" }, "409": { description: "Has dependent applications" } }
+      }
+    },
+    "/api/admin/applications": {
+      get: {
+        tags: ["Admin"],
+        summary: "List applications (Admin)",
+        responses: { "200": { description: "Applications list returned" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" } }
+      },
+      post: {
+        tags: ["Admin"],
+        summary: "Create application (Admin)",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["job_posting_id", "applicant_name", "applicant_email"],
+                properties: {
+                  job_posting_id: { type: "integer" },
+                  user_id: { type: "integer", nullable: true },
+                  applicant_name: { type: "string", maxLength: 255 },
+                  applicant_email: { type: "string", format: "email", maxLength: 255 },
+                  status: { type: "string", enum: ["PENDING", "REVIEWING", "ACCEPTED", "REJECTED"], default: "PENDING" },
+                  resume_url: { type: "string", format: "uri", maxLength: 255, nullable: true },
+                  cover_letter: { type: "string", nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: { "201": { description: "Application created" }, "400": { description: "Validation failed" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" } }
+      }
+    },
+    "/api/admin/applications/{id}": {
+      get: {
+        tags: ["Admin"],
+        summary: "Get application by ID (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: { "200": { description: "Application found" }, "400": { description: "Invalid ID" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      },
+      put: {
+        tags: ["Admin"],
+        summary: "Update application status or details (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["job_posting_id", "applicant_name", "applicant_email", "status"],
+                properties: {
+                  job_posting_id: { type: "integer" },
+                  user_id: { type: "integer", nullable: true },
+                  applicant_name: { type: "string", maxLength: 255 },
+                  applicant_email: { type: "string", format: "email", maxLength: 255 },
+                  status: { type: "string", enum: ["PENDING", "REVIEWING", "ACCEPTED", "REJECTED"] },
+                  resume_url: { type: "string", format: "uri", maxLength: 255, nullable: true },
+                  cover_letter: { type: "string", nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: { "200": { description: "Application updated" }, "400": { description: "Validation failed" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      },
+      patch: {
+        tags: ["Admin"],
+        summary: "Patch application (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  job_posting_id: { type: "integer" },
+                  user_id: { type: "integer", nullable: true },
+                  applicant_name: { type: "string", maxLength: 255 },
+                  applicant_email: { type: "string", format: "email", maxLength: 255 },
+                  status: { type: "string", enum: ["PENDING", "REVIEWING", "ACCEPTED", "REJECTED"] },
+                  resume_url: { type: "string", format: "uri", maxLength: 255, nullable: true },
+                  cover_letter: { type: "string", nullable: true }
+                }
+              }
+            }
+          }
+        },
+        responses: { "200": { description: "Application updated" }, "400": { description: "Validation failed" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
+      },
+      delete: {
+        tags: ["Admin"],
+        summary: "Delete application (Admin)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: { "200": { description: "Application deleted" }, "400": { description: "Invalid ID" }, "401": { description: "Unauthorized" }, "403": { description: "Forbidden" }, "404": { description: "Not found" } }
       }
     },
     "/api/swagger": {

@@ -108,6 +108,9 @@ const deleteUser = async (req, res) => {
 
     return res.status(204).send();
   } catch (error) {
+    if (error && error.code === 'CANNOT_DELETE_LAST_ADMIN') {
+      return res.status(409).json({ success: false, message: error.message });
+    }
     return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };

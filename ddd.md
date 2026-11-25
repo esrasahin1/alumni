@@ -435,6 +435,11 @@ All data operations are asynchronous (`async/await`) and execute parameterized S
   * `004_create_applications_table.sql` & `.js`: Creates `applications` table.
   * `005_add_user_id_to_job_postings.sql` & `.js`: Adds `user_id` with foreign key constraint referencing `users(id)` (`ON DELETE SET NULL ON UPDATE CASCADE`).
   * `006_update_job_postings_task2_rules.sql` & `.js`: Modifies `job_postings` to enforce `title VARCHAR(120) NOT NULL` and allow `description TEXT NULL`.
+  * `009_add_auth_role_to_users.sql` & `.js`: Adds `auth_role VARCHAR(50) NOT NULL DEFAULT 'user'` AFTER `role` on `users` (decoupling authorization from academic account types `'student'`/`'alumni'`) plus generated `single_admin_guard` with `UNIQUE KEY uq_users_single_admin` so at most one administrator account can exist.
+* **Admin Promotion Script (`backend/src/database/promoteAdmin.js`):** Promotes an explicitly specified existing registered user (with `password_hash`) to `auth_role = 'admin'` inside a transaction with row locking via `npm run admin:promote -- <email>`, blocking any second admin and never modifying other user accounts.
+* **Transactional Integrity Guards:**
+  * `userModel.updateUserAdmin` & `safeDeleteUserById` (`deleteUser` / `deleteUserAdmin`) lock rows with `FOR UPDATE` to block demoting or deleting the sole admin and detach dependent `applications` (`user_id = NULL`) on non-admin deletion.
+  * `jobPostingModel.deleteJobPosting` runs inside a transaction with `FOR UPDATE` locking and throws `JOB_HAS_APPLICATIONS` (`409 Conflict`) if any applications reference the job posting.
 * Commands:
   * `npm run migrate`: Applies all pending migrations in alphabetical order within a new batch.
   * `npm run migrate:status`: Displays executed vs. pending migrations table.

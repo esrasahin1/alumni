@@ -23,6 +23,8 @@
  * @param {string} str
  * @returns {string}
  */
+const { NAV_AUTH_CSS, renderNavAuthItems } = require('./navAuthHelper');
+
 const escapeHtml = (str) => {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -40,7 +42,7 @@ const escapeHtml = (str) => {
  * @param {string} content - Sayfa gövdesi HTML içeriği
  * @returns {string} HTML sayfası
  */
-const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
+const getLayout = (title, badgeText, content, currentUser = null) => `<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
@@ -254,7 +256,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       color: var(--lime) !important;
       transform: translateY(-1px);
     }
-
+${NAV_AUTH_CSS}
     /* Mobile Menu Toggle Button */
     .mobile-menu-toggle {
       display: none;
@@ -896,6 +898,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
         <a href="/announcements" class="nav-link active">Announcements</a>
         <a href="/job-postings" class="nav-link">Job Postings</a>
         <a href="/applications" class="nav-link">Applications</a>
+        ${renderNavAuthItems(currentUser, escapeHtml)}
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>
     </div>
@@ -975,7 +978,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
  * @param {Array} announcements - Duyuru listesi
  * @returns {string} HTML içeriği
  */
-const renderAnnouncementsPage = (announcements = []) => {
+const renderAnnouncementsPage = (announcements = [], currentUser = null) => {
   const announcementRows = announcements.length > 0
     ? announcements.map(announcement => `
       <tr>
@@ -1148,7 +1151,7 @@ const renderAnnouncementsPage = (announcements = []) => {
     </script>
   `;
 
-  return getLayout("Announcement Management", "Announcement View Layer", content);
+  return getLayout("Announcement Management", "Announcement View Layer", content, currentUser);
 };
 
 /**
@@ -1157,7 +1160,7 @@ const renderAnnouncementsPage = (announcements = []) => {
  * @param {Object} announcement - Oluşturulan duyuru nesnesi
  * @returns {string} HTML içeriği
  */
-const renderAnnouncementCreatedPage = (announcement) => {
+const renderAnnouncementCreatedPage = (announcement, currentUser = null) => {
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1200,7 +1203,7 @@ const renderAnnouncementCreatedPage = (announcement) => {
     </div>
   `;
 
-  return getLayout("Duyuru Oluşturuldu", "Announcement View Layer", content);
+  return getLayout("Duyuru Oluşturuldu", "Announcement View Layer", content, currentUser);
 };
 
 /**
@@ -1209,7 +1212,7 @@ const renderAnnouncementCreatedPage = (announcement) => {
  * @param {Object} announcement - Duyuru nesnesi
  * @returns {string} HTML içeriği
  */
-const renderAnnouncementDetailPage = (announcement) => {
+const renderAnnouncementDetailPage = (announcement, currentUser = null) => {
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1273,7 +1276,7 @@ const renderAnnouncementDetailPage = (announcement) => {
     </script>
   `;
 
-  return getLayout(`Duyuru Detayı #${announcement.id}`, "Announcement View Layer", content);
+  return getLayout(`Duyuru Detayı #${announcement.id}`, "Announcement View Layer", content, currentUser);
 };
 
 /**
@@ -1284,7 +1287,7 @@ const renderAnnouncementDetailPage = (announcement) => {
  * @param {boolean} [options.isPartial=false] - Kısmi güncelleme kontrolü
  * @returns {string} HTML içeriği
  */
-const renderAnnouncementUpdatedPage = (announcement, { isPartial = false } = {}) => {
+const renderAnnouncementUpdatedPage = (announcement, { isPartial = false, currentUser = null } = {}) => {
   const updateType = isPartial ? "Kısmi Güncelleme (PATCH)" : "Tam Güncelleme (PUT)";
   const badgeClass = isPartial ? "badge-warning" : "badge-success";
 
@@ -1330,7 +1333,7 @@ const renderAnnouncementUpdatedPage = (announcement, { isPartial = false } = {})
     </div>
   `;
 
-  return getLayout("Duyuru Güncellendi", "Announcement View Layer", content);
+  return getLayout("Duyuru Güncellendi", "Announcement View Layer", content, currentUser);
 };
 
 /**
@@ -1339,7 +1342,7 @@ const renderAnnouncementUpdatedPage = (announcement, { isPartial = false } = {})
  * @param {string|number} id - Silinen duyuru ID'si
  * @returns {string} HTML içeriği
  */
-const renderAnnouncementDeletedPage = (id) => {
+const renderAnnouncementDeletedPage = (id, currentUser = null) => {
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1366,7 +1369,7 @@ const renderAnnouncementDeletedPage = (id) => {
     </div>
   `;
 
-  return getLayout("Duyuru Silindi", "Announcement View Layer", content);
+  return getLayout("Duyuru Silindi", "Announcement View Layer", content, currentUser);
 };
 
 /**
@@ -1375,7 +1378,7 @@ const renderAnnouncementDeletedPage = (id) => {
  * @param {string|number} id - Bulunamayan duyuru ID'si
  * @returns {string} HTML içeriği
  */
-const renderAnnouncementNotFoundPage = (id) => {
+const renderAnnouncementNotFoundPage = (id, currentUser = null) => {
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1404,7 +1407,7 @@ const renderAnnouncementNotFoundPage = (id) => {
     </div>
   `;
 
-  return getLayout("Duyuru Bulunamadı", "Announcement View Layer", content);
+  return getLayout("Duyuru Bulunamadı", "Announcement View Layer", content, currentUser);
 };
 
 /**
@@ -1413,7 +1416,7 @@ const renderAnnouncementNotFoundPage = (id) => {
  * @param {Object} announcement - Düzenlenecek duyuru nesnesi
  * @returns {string} HTML içeriği
  */
-const renderEditAnnouncementPage = (announcement) => {
+const renderEditAnnouncementPage = (announcement, currentUser = null) => {
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1471,7 +1474,7 @@ const renderEditAnnouncementPage = (announcement) => {
     </script>
   `;
 
-  return getLayout(`Duyuru Düzenle #${announcement.id}`, "Announcement View Layer", content);
+  return getLayout(`Duyuru Düzenle #${announcement.id}`, "Announcement View Layer", content, currentUser);
 };
 
 module.exports = {

@@ -11,10 +11,13 @@
     "migrate:verify": "node src/database/migrate.js verify",
     "seed": "node src/database/seed.js",
     "db:seed": "node src/database/seed.js",
+    "admin:promote": "node src/database/promoteAdmin.js",
     "test": "node test_nested_route.js",
     "test:register": "node test_register.js",
     "test:auth": "node test_auth.js",
-    "test:auth-middleware": "node test_auth_middleware.js"
+    "test:auth-middleware": "node test_auth_middleware.js",
+    "test:admin": "node test_admin.js",
+    "test:admin:unit": "node test_admin_unit.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -29,6 +29,11 @@ const escapeHtml = (str) => {
  * @returns {string} HTML string
  */
 const getLayout = (title, content, { activePage = 'register', currentUser = null } = {}) => {
+  const adminNavItem =
+    currentUser && currentUser.auth_role === 'admin'
+      ? '\n        <a href="/admin" class="nav-link">Admin Panel</a>'
+      : '';
+
   const authNavItems = currentUser
     ? `
         <span class="nav-user-pill" title="${escapeHtml(currentUser.email || '')}">👤 ${escapeHtml(currentUser.name)}</span>
@@ -774,7 +779,7 @@ const getLayout = (title, content, { activePage = 'register', currentUser = null
         <a href="/users" class="nav-link">Users</a>
         <a href="/announcements" class="nav-link">Announcements</a>
         <a href="/job-postings" class="nav-link">Job Postings</a>
-        <a href="/applications" class="nav-link">Applications</a>
+        <a href="/applications" class="nav-link">Applications</a>${adminNavItem}
         ${authNavItems}
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>

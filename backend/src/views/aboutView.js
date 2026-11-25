@@ -16,6 +16,8 @@
  * @param {string} str
  * @returns {string}
  */
+const { NAV_AUTH_CSS, renderNavAuthItems } = require('./navAuthHelper');
+
 const escapeHtml = (str) => {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -30,7 +32,7 @@ const escapeHtml = (str) => {
  *
  * @returns {string} HTML content
  */
-const renderAboutPage = () => {
+const renderAboutPage = (currentUser = null) => {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -239,7 +241,7 @@ const renderAboutPage = () => {
       color: var(--lime) !important;
       transform: translateY(-1px);
     }
-
+${NAV_AUTH_CSS}
     /* Mobile Menu Toggle Button */
     .mobile-menu-toggle {
       display: none;
@@ -851,6 +853,7 @@ const renderAboutPage = () => {
         <a href="/announcements" class="nav-link">Announcements</a>
         <a href="/job-postings" class="nav-link">Job Postings</a>
         <a href="/applications" class="nav-link">Applications</a>
+        ${renderNavAuthItems(currentUser, escapeHtml)}
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>
     </div>

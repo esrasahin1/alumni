@@ -23,6 +23,8 @@
  * @param {string} str
  * @returns {string}
  */
+const { NAV_AUTH_CSS, renderNavAuthItems } = require('./navAuthHelper');
+
 const escapeHtml = (str) => {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -40,7 +42,7 @@ const escapeHtml = (str) => {
  * @param {string} content - Page body HTML content
  * @returns {string} Complete HTML document
  */
-const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
+const getLayout = (title, badgeText, content, currentUser = null) => `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -254,7 +256,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       color: var(--lime) !important;
       transform: translateY(-1px);
     }
-
+${NAV_AUTH_CSS}
     /* Mobile Menu Toggle Button */
     .mobile-menu-toggle {
       display: none;
@@ -926,6 +928,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
         <a href="/announcements" class="nav-link">Announcements</a>
         <a href="/job-postings" class="nav-link active">Job Postings</a>
         <a href="/applications" class="nav-link">Applications</a>
+        ${renderNavAuthItems(currentUser, escapeHtml)}
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>
     </div>
@@ -1005,7 +1008,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
  * @param {Array} jobPostings - List of job postings
  * @returns {string} HTML content
  */
-const renderJobPostingsPage = (jobPostings = []) => {
+const renderJobPostingsPage = (jobPostings = [], currentUser = null) => {
   const tableRows = jobPostings && jobPostings.length > 0
     ? jobPostings.map(job => `
       <tr>
@@ -1210,7 +1213,7 @@ const renderJobPostingsPage = (jobPostings = []) => {
     </script>
   `;
 
-  return getLayout('Career & Job Opportunities', 'Job View Layer', content);
+  return getLayout('Career & Job Opportunities', 'Job View Layer', content, currentUser);
 };
 
 /**
@@ -1219,7 +1222,7 @@ const renderJobPostingsPage = (jobPostings = []) => {
  * @param {Object} job - Single job posting object
  * @returns {string} HTML content
  */
-const renderJobPostingDetailPage = (job) => {
+const renderJobPostingDetailPage = (job, currentUser = null) => {
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1310,7 +1313,7 @@ const renderJobPostingDetailPage = (job) => {
     </script>
   `;
 
-  return getLayout(`Job Posting #${job.id}`, 'Details', content);
+  return getLayout(`Job Posting #${job.id}`, 'Details', content, currentUser);
 };
 
 /**
@@ -1319,7 +1322,7 @@ const renderJobPostingDetailPage = (job) => {
  * @param {string|number} id - Missing job posting ID
  * @returns {string} HTML content
  */
-const renderJobPostingNotFoundPage = (id) => {
+const renderJobPostingNotFoundPage = (id, currentUser = null) => {
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1342,7 +1345,7 @@ const renderJobPostingNotFoundPage = (id) => {
     </div>
   `;
 
-  return getLayout('Job Posting Not Found', '404', content);
+  return getLayout('Job Posting Not Found', '404', content, currentUser);
 };
 
 /**
@@ -1351,7 +1354,7 @@ const renderJobPostingNotFoundPage = (id) => {
  * @param {Object} job - Newly created job posting object
  * @returns {string} HTML content
  */
-const renderJobPostingCreatedPage = (job) => {
+const renderJobPostingCreatedPage = (job, currentUser = null) => {
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1385,7 +1388,7 @@ const renderJobPostingCreatedPage = (job) => {
     </div>
   `;
 
-  return getLayout('Job Posting Published', 'Success', content);
+  return getLayout('Job Posting Published', 'Success', content, currentUser);
 };
 
 /**
@@ -1432,7 +1435,7 @@ const renderJobPostingUpdatedPage = (job, meta = {}) => {
     </div>
   `;
 
-  return getLayout('Job Posting Updated', 'Success', content);
+  return getLayout('Job Posting Updated', 'Success', content, meta.currentUser || null);
 };
 
 /**
@@ -1441,7 +1444,7 @@ const renderJobPostingUpdatedPage = (job, meta = {}) => {
  * @param {string|number} id - Deleted job posting ID
  * @returns {string} HTML content
  */
-const renderJobPostingDeletedPage = (id) => {
+const renderJobPostingDeletedPage = (id, currentUser = null) => {
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1464,7 +1467,7 @@ const renderJobPostingDeletedPage = (id) => {
     </div>
   `;
 
-  return getLayout('Job Posting Deleted', 'Success', content);
+  return getLayout('Job Posting Deleted', 'Success', content, currentUser);
 };
 
 module.exports = {

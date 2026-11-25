@@ -9,6 +9,8 @@
  * @param {string} str
  * @returns {string}
  */
+const { NAV_AUTH_CSS, renderNavAuthItems } = require('./navAuthHelper');
+
 const escapeHtml = (str) => {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -60,7 +62,7 @@ const formatDate = (dateInput, fallback = '-') => {
  * @param {Array} jobPostings - List of job postings created by the user
  * @returns {string} HTML content
  */
-const renderUserJobsPage = (user = {}, jobPostings = []) => {
+const renderUserJobsPage = (user = {}, jobPostings = [], currentUser = null) => {
   const jobs = Array.isArray(jobPostings) ? jobPostings : [];
   const userName = user && user.name ? user.name : `User #${user && user.id ? user.id : 'Unknown'}`;
   const userEmail = user && user.email ? user.email : '-';
@@ -308,7 +310,7 @@ const renderUserJobsPage = (user = {}, jobPostings = []) => {
       color: var(--lime) !important;
       transform: translateY(-1px);
     }
-
+${NAV_AUTH_CSS}
     /* Mobile Menu Toggle Button */
     .mobile-menu-toggle {
       display: none;
@@ -862,6 +864,7 @@ const renderUserJobsPage = (user = {}, jobPostings = []) => {
         <a href="/announcements" class="nav-link">Announcements</a>
         <a href="/job-postings" class="nav-link">Job Postings</a>
         <a href="/applications" class="nav-link">Applications</a>
+        ${renderNavAuthItems(currentUser, escapeHtml)}
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>
     </div>

@@ -183,6 +183,9 @@ const deleteJobPosting = async (req, res) => {
 
     res.status(204).send();
   } catch (error) {
+    if (error && error.code === 'JOB_HAS_APPLICATIONS') {
+      return res.status(409).json({ success: false, message: error.message });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };

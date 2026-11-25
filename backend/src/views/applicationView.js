@@ -23,6 +23,8 @@
  * @param {string} str
  * @returns {string}
  */
+const { NAV_AUTH_CSS, renderNavAuthItems } = require('./navAuthHelper');
+
 const escapeHtml = (str) => {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -76,7 +78,7 @@ const formatDate = (dateInput, fallback = '-') => {
  * @param {string} content - Page body HTML content
  * @returns {string} Complete HTML document
  */
-const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
+const getLayout = (title, badgeText, content, currentUser = null) => `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -290,7 +292,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
       color: var(--lime) !important;
       transform: translateY(-1px);
     }
-
+${NAV_AUTH_CSS}
     /* Mobile Menu Toggle Button */
     .mobile-menu-toggle {
       display: none;
@@ -952,6 +954,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
         <a href="/announcements" class="nav-link">Announcements</a>
         <a href="/job-postings" class="nav-link">Job Postings</a>
         <a href="/applications" class="nav-link active">Applications</a>
+        ${renderNavAuthItems(currentUser, escapeHtml)}
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>
     </div>
@@ -1211,7 +1214,7 @@ const renderApplicationsPage = (applications = [], options = {}) => {
     </div>
   `;
 
-  return getLayout(isNested ? `${job.title} — Applications` : 'Job Applications', 'Application View Layer', content);
+  return getLayout(isNested ? `${job.title} — Applications` : 'Job Applications', 'Application View Layer', content, options.currentUser || null);
 };
 
 /**
@@ -1220,7 +1223,7 @@ const renderApplicationsPage = (applications = [], options = {}) => {
  * @param {Object} application - Single application object
  * @returns {string} HTML content
  */
-const renderApplicationDetailPage = (application) => {
+const renderApplicationDetailPage = (application, currentUser = null) => {
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1366,7 +1369,7 @@ const renderApplicationDetailPage = (application) => {
     </script>
   `;
 
-  return getLayout(`Application #${application.id}`, 'Details', content);
+  return getLayout(`Application #${application.id}`, 'Details', content, currentUser);
 };
 
 /**
@@ -1375,7 +1378,7 @@ const renderApplicationDetailPage = (application) => {
  * @param {string|number} id - Missing application ID
  * @returns {string} HTML content
  */
-const renderApplicationNotFoundPage = (id) => {
+const renderApplicationNotFoundPage = (id, currentUser = null) => {
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1398,7 +1401,7 @@ const renderApplicationNotFoundPage = (id) => {
     </div>
   `;
 
-  return getLayout('Application Not Found', '404', content);
+  return getLayout('Application Not Found', '404', content, currentUser);
 };
 
 /**
@@ -1407,7 +1410,7 @@ const renderApplicationNotFoundPage = (id) => {
  * @param {Object} application - Newly created application object
  * @returns {string} HTML content
  */
-const renderApplicationCreatedPage = (application) => {
+const renderApplicationCreatedPage = (application, currentUser = null) => {
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1448,7 +1451,7 @@ const renderApplicationCreatedPage = (application) => {
     </div>
   `;
 
-  return getLayout('Application Submitted', 'Success', content);
+  return getLayout('Application Submitted', 'Success', content, currentUser);
 };
 
 /**
@@ -1491,7 +1494,7 @@ const renderApplicationUpdatedPage = (application, meta = {}) => {
     </div>
   `;
 
-  return getLayout('Application Updated', 'Success', content);
+  return getLayout('Application Updated', 'Success', content, meta.currentUser || null);
 };
 
 /**
@@ -1500,7 +1503,7 @@ const renderApplicationUpdatedPage = (application, meta = {}) => {
  * @param {string|number} id - Deleted application ID
  * @returns {string} HTML content
  */
-const renderApplicationDeletedPage = (id) => {
+const renderApplicationDeletedPage = (id, currentUser = null) => {
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1523,7 +1526,7 @@ const renderApplicationDeletedPage = (id) => {
     </div>
   `;
 
-  return getLayout('Application Deleted', 'Success', content);
+  return getLayout('Application Deleted', 'Success', content, currentUser);
 };
 
 module.exports = {

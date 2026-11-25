@@ -1079,3 +1079,39 @@ The middleware pipeline can be validated across all five functional areas using 
 | **5. Log File Persistence** | Inspect `backend/logs/error.logs` | File contains timestamped `404` and `Error:` entries with full stack traces. |
 | **6. Automated Test Suite (Nested Routes & Task 2)** | `npm test` *(from `backend/` directory)* | Executes `test_nested_route.js`. Verifies all **19/19 scenarios pass cleanly** (13 nested route & CRUD scenarios + 6 Task 2 validation scenarios) with all middleware active. |
 
+---
+
+### 8. Admin Panel & Single-Admin Authorization (`auth_role`)
+
+* **Authorization Field (`Migration 009`):**
+  * `users.auth_role VARCHAR(50) NOT NULL DEFAULT 'user'` (`'user'` or `'admin'`), kept completely separate from `users.role` (`'student'` / `'alumni'` account type).
+  * `single_admin_guard` generated `STORED` column + `UNIQUE KEY uq_users_single_admin` enforces **at most 1 admin** at the MySQL 8 schema level (while allowing `0` admins initially until promotion).
+* **Authorization & CSRF Middleware:**
+  * [`backend/src/middlewares/requireAdminMiddleware.js`](backend/src/middlewares/requireAdminMiddleware.js) (`requireAdmin`) checks `req.user?.auth_role === 'admin'`. Unauthenticated requests are rejected with `401` (API) or `302 /login?authRequired=1` (browser); authenticated non-admins receive `403 Forbidden`.
+  * [`backend/src/middlewares/adminCsrfMiddleware.js`](backend/src/middlewares/adminCsrfMiddleware.js) (`adminCsrfProtection`) validates per-session synchronizer `_csrf` tokens on all `/admin/*` form `POST` requests without affecting existing login, registration, logout, or guest application flows.
+* **Single-Admin & Relational Integrity Guards:**
+  * Creating a second admin or promoting another account to admin is blocked inside DB transactions and by `uq_users_single_admin` (`409 Conflict`).
+  * Deleting or demoting the sole admin is blocked (`409 Conflict`) across both admin and legacy user routes.
+  * Deleting a standard user runs in a transaction that preserves their submitted `applications` with `user_id = NULL`.
+  * Deleting a job posting is transactionally blocked (`409 Conflict`) if any `applications` still reference it.
+* **Protected Admin MVC Routes (`/admin/*`):**
+  * `GET /admin` — Dashboard with aggregate counts for users, admins, announcements, job postings, and applications.
+  * `GET /admin/users`, `POST /admin/users`, `GET /admin/users/:id/edit`, `POST /admin/users/:id`, `POST /admin/users/:id/delete`
+  * `GET /admin/announcements`, `POST /admin/announcements`, `GET /admin/announcements/:id/edit`, `POST /admin/announcements/:id`, `POST /admin/announcements/:id/delete`
+  * `GET /admin/job-postings`, `POST /admin/job-postings`, `GET /admin/job-postings/:id/edit`, `POST /admin/job-postings/:id`, `POST /admin/job-postings/:id/delete`
+  * `GET /admin/applications`, `POST /admin/applications`, `GET /admin/applications/:id/edit`, `POST /admin/applications/:id`, `POST /admin/applications/:id/delete`
+* **Protected Admin REST API (`/api/admin/*`):**
+  * `GET /api/admin/summary`
+  * Full CRUD endpoints (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`) for `/api/admin/users`, `/api/admin/announcements`, `/api/admin/job-postings`, and `/api/admin/applications`, documented with `requestBody` and response schemas in Swagger at `/api/swagger`.
+* **Safe Admin Promotion (CLI):**
+  1. Register your personal account via `/register`.
+  2. Apply pending migrations (`cd backend && npm run migrate`).
+  3. Promote your personal account by email:
+     ```bash
+     cd backend
+     npm run admin:promote -- your.email@example.com
+     ```
+* **Admin Panel Test Suites:**
+  * Offline unit checks (no DB mutation): `cd backend && npm run test:admin:unit`
+  * Live MySQL/HTTP integration tests (after Migration `009` is applied): `cd backend && npm run test:admin` (if a single real admin already exists, pass `ADMIN_TEST_EMAIL=... ADMIN_TEST_PASSWORD=...`).
+

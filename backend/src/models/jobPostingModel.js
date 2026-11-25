@@ -184,7 +184,8 @@ const patchJobPosting = async (id, partialData) => {
 };
 
 /**
- * Deletes a job posting by ID from MySQL.
+ * Deletes a job posting by ID from MySQL inside a transaction.
+ * Blocks deletion (throws JOB_HAS_APPLICATIONS) if any applications reference the job posting.
  * @param {number|string} id - Job Posting ID
  * @returns {Promise<boolean>} True if deleted, false if job posting not found
  */
@@ -194,11 +195,51 @@ const deleteJobPosting = async (id) => {
   }
   const jobPostingId = Number(id);
   const pool = await getPool();
-  const [result] = await pool.query(
-    'DELETE FROM job_postings WHERE id = ?',
-    [jobPostingId]
-  );
-  return result.affectedRows > 0;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [jobRows] = await connection.query(
+      'SELECT id FROM job_postings WHERE id = ? LIMIT 1 FOR UPDATE',
+      [jobPostingId]
+    );
+    if (jobRows.length === 0) {
+      await connection.rollback();
+      return false;
+    }
+
+    const [appRows] = await connection.query(
+      'SELECT COUNT(*) AS count FROM applications WHERE job_posting_id = ? FOR UPDATE',
+      [jobPostingId]
+    );
+    const appCount = Number(appRows[0]?.count || 0);
+    if (appCount > 0) {
+      await connection.rollback();
+      const err = new Error(
+        `Cannot delete job posting #${jobPostingId} while ${appCount} application(s) reference it.`
+      );
+      err.code = 'JOB_HAS_APPLICATIONS';
+      err.count = appCount;
+      throw err;
+    }
+
+    const [result] = await connection.query(
+      'DELETE FROM job_postings WHERE id = ?',
+      [jobPostingId]
+    );
+    await connection.commit();
+    return result.affectedRows > 0;
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch (_) {
+      // Ignore rollback failure when transaction already ended
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 /**

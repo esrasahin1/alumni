@@ -37,7 +37,7 @@ const getApplications = async (req, res) => {
 
     const view = getApplicationView();
     if (view && typeof view.renderApplicationsPage === 'function') {
-      const html = view.renderApplicationsPage(applications);
+      const html = view.renderApplicationsPage(applications, { currentUser: req && req.user ? req.user : null });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -62,7 +62,7 @@ const getApplication = async (req, res) => {
       }
       const view = getApplicationView();
       if (view && typeof view.renderApplicationNotFoundPage === 'function') {
-        const html = view.renderApplicationNotFoundPage(id);
+        const html = view.renderApplicationNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(html);
       }
@@ -78,7 +78,7 @@ const getApplication = async (req, res) => {
       }
       const view = getApplicationView();
       if (view && typeof view.renderApplicationNotFoundPage === 'function') {
-        const html = view.renderApplicationNotFoundPage(id);
+        const html = view.renderApplicationNotFoundPage(id, req && req.user ? req.user : null);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(404).send(html);
       }
@@ -92,7 +92,7 @@ const getApplication = async (req, res) => {
 
     const view = getApplicationView();
     if (view && typeof view.renderApplicationDetailPage === 'function') {
-      const html = view.renderApplicationDetailPage(application);
+      const html = view.renderApplicationDetailPage(application, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -141,7 +141,7 @@ const createApplication = async (req, res) => {
 
     const view = getApplicationView();
     if (view && typeof view.renderApplicationCreatedPage === 'function') {
-      const html = view.renderApplicationCreatedPage(newApplication);
+      const html = view.renderApplicationCreatedPage(newApplication, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(201).send(html);
     }
@@ -149,6 +149,13 @@ const createApplication = async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(201).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Başvuru Alındı</title></head><body><h1>Başvuru Başarıyla Alındı</h1><p>ID: ${newApplication.id}</p></body></html>`);
   } catch (error) {
+    if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Bulunamadı</title></head><body><h1>Hata: Belirtilen iş ilanı bulunamadı.</h1><a href="/applications">← Geri Dön</a></body></html>`);
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };
@@ -194,7 +201,7 @@ const updateApplication = async (req, res) => {
 
     const view = getApplicationView();
     if (view && typeof view.renderApplicationUpdatedPage === 'function') {
-      const html = view.renderApplicationUpdatedPage(updatedApplication, { isPartial: false });
+      const html = view.renderApplicationUpdatedPage(updatedApplication, { isPartial: false, currentUser: req && req.user ? req.user : null });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -202,6 +209,12 @@ const updateApplication = async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Başvuru Güncellendi</title></head><body><h1>Başvuru Güncellendi</h1></body></html>`);
   } catch (error) {
+    if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
+      }
+      return res.status(404).send('Belirtilen iş ilanı bulunamadı');
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };
@@ -247,7 +260,7 @@ const patchApplication = async (req, res) => {
 
     const view = getApplicationView();
     if (view && typeof view.renderApplicationUpdatedPage === 'function') {
-      const html = view.renderApplicationUpdatedPage(updatedApplication, { isPartial: true });
+      const html = view.renderApplicationUpdatedPage(updatedApplication, { isPartial: true, currentUser: req && req.user ? req.user : null });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -255,6 +268,12 @@ const patchApplication = async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Başvuru Güncellendi</title></head><body><h1>Başvuru Kısmi Olarak Güncellendi</h1></body></html>`);
   } catch (error) {
+    if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
+      }
+      return res.status(404).send('Belirtilen iş ilanı bulunamadı');
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };
@@ -288,7 +307,7 @@ const deleteApplication = async (req, res) => {
 
     const view = getApplicationView();
     if (view && typeof view.renderApplicationDeletedPage === 'function') {
-      const html = view.renderApplicationDeletedPage(id);
+      const html = view.renderApplicationDeletedPage(id, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -332,7 +351,7 @@ const getApplicationsByJobPosting = async (req, res) => {
 
     const view = getApplicationView();
     if (view && typeof view.renderApplicationsPage === 'function') {
-      const html = view.renderApplicationsPage(applications, { jobPosting });
+      const html = view.renderApplicationsPage(applications, { jobPosting, currentUser: req && req.user ? req.user : null });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
@@ -409,7 +428,7 @@ const createApplicationForJobPosting = async (req, res) => {
 
     const view = getApplicationView();
     if (view && typeof view.renderApplicationCreatedPage === 'function') {
-      const html = view.renderApplicationCreatedPage(newApplication);
+      const html = view.renderApplicationCreatedPage(newApplication, req && req.user ? req.user : null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(201).send(html);
     }
@@ -417,6 +436,12 @@ const createApplicationForJobPosting = async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(201).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Başvuru Alındı</title></head><body><h1>Başvuru Alındı</h1><p>ID: ${newApplication.id}</p></body></html>`);
   } catch (error) {
+    if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
+      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+        return res.status(404).json({ message: "İş ilanı bulunamadı" });
+      }
+      return res.status(404).send('İş ilanı bulunamadı');
+    }
     res.status(500).send('Internal Server Error: ' + error.message);
   }
 };

@@ -39,6 +39,11 @@ const escapeHtml = (str) => {
  * @returns {string} HTML content
  */
 const renderHomePage = (currentUser = null) => {
+  const adminNavItem =
+    currentUser && currentUser.auth_role === 'admin'
+      ? '<a href="/admin" class="nav-link">Admin Panel</a>'
+      : '';
+
   const authNavItems = currentUser
     ? `<span class="nav-user-pill" title="${escapeHtml(currentUser.email || '')}">👤 ${escapeHtml(currentUser.name)}</span>
         <form action="/logout" method="POST" style="display:inline; margin:0;">
@@ -1063,6 +1068,7 @@ const renderHomePage = (currentUser = null) => {
         <a href="/announcements" class="nav-link">Announcements</a>
         <a href="/job-postings" class="nav-link">Job Postings</a>
         <a href="/applications" class="nav-link">Applications</a>
+        ${adminNavItem}
         ${authNavItems}
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>
