@@ -895,6 +895,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
         <a href="/announcements" class="nav-link">Announcements</a>
         <a href="/job-postings" class="nav-link">Job Postings</a>
         <a href="/applications" class="nav-link">Applications</a>
+        <a href="/register" class="nav-link">Register</a>
         <a href="/api/swagger" target="_blank" class="nav-link nav-cta">Swagger UI</a>
       </nav>
     </div>
@@ -927,6 +928,7 @@ const getLayout = (title, badgeText, content) => `<!DOCTYPE html>
           <a href="/announcements">Announcements</a>
           <a href="/job-postings">Job Postings</a>
           <a href="/applications">Applications</a>
+          <a href="/register">Register</a>
           <a href="/api/swagger" target="_blank">Swagger Docs</a>
           <a href="/api/health" target="_blank">System Health</a>
         </div>

@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const alumniRoutes = require('./routes/alumniRoutes');
+const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const apiUserRoutes = require('./routes/apiUserRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
@@ -57,6 +58,7 @@ app.get('/about', (req, res) => {
 });
 
 // Rotalar
+app.use('/', authRoutes);
 app.use('/alumni', alumniRoutes);
 app.use('/users', userRoutes);
 app.use('/api/users', apiUserRoutes);

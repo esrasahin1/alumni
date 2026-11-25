@@ -11,7 +11,8 @@
     "migrate:verify": "node src/database/migrate.js verify",
     "seed": "node src/database/seed.js",
     "db:seed": "node src/database/seed.js",
-    "test": "node test_nested_route.js"
+    "test": "node test_nested_route.js",
+    "test:register": "node test_register.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
