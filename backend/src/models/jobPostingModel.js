@@ -39,16 +39,31 @@ const getAllJobPostings = async () => {
   return rows.map(formatJobPosting);
 };
 
+function parsePositiveIntegerId(val) {
+  if (typeof val === 'number') {
+    return Number.isInteger(val) && val > 0 ? val : null;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
 /**
  * Finds a single job posting by ID.
  * @param {number|string} id - Job Posting ID
  * @returns {Promise<Object|null>} Job Posting object or null if not found
  */
 const getJobPostingById = async (id) => {
-  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+  const jobPostingId = parsePositiveIntegerId(id);
+  if (jobPostingId === null) {
     return null;
   }
-  const jobPostingId = Number(id);
   const pool = await getPool();
   const [rows] = await pool.query(
     'SELECT id, user_id, title, company, location, description, contact_email, created_at, updated_at FROM job_postings WHERE id = ? LIMIT 1',
@@ -65,9 +80,7 @@ const getJobPostingById = async (id) => {
 const createJobPosting = async (jobPostingData = {}) => {
   const data = jobPostingData || {};
   const rawUserId = data.user_id !== undefined ? data.user_id : data.userId;
-  const userId = rawUserId !== undefined && rawUserId !== null && rawUserId !== '' && !isNaN(Number(rawUserId))
-    ? Number(rawUserId)
-    : null;
+  const userId = parsePositiveIntegerId(rawUserId);
 
   const title = data.title !== undefined ? String(data.title) : '';
   if (title && title.length > 120) {
@@ -102,10 +115,10 @@ const createJobPosting = async (jobPostingData = {}) => {
  * @returns {Promise<Object|null>} Updated job posting or null if not found
  */
 const updateJobPosting = async (id, jobPostingData = {}, isPartial = false) => {
-  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+  const jobPostingId = parsePositiveIntegerId(id);
+  if (jobPostingId === null) {
     return null;
   }
-  const jobPostingId = Number(id);
   const existingJobPosting = await getJobPostingById(jobPostingId);
 
   if (!existingJobPosting) {
@@ -123,7 +136,7 @@ const updateJobPosting = async (id, jobPostingData = {}, isPartial = false) => {
   if (isPartial) {
     if (data.user_id !== undefined || data.userId !== undefined) {
       const val = data.user_id !== undefined ? data.user_id : data.userId;
-      updatedUserId = (val !== null && val !== '' && !isNaN(Number(val))) ? Number(val) : null;
+      updatedUserId = parsePositiveIntegerId(val);
     }
     if (data.title !== undefined) updatedTitle = String(data.title);
     if (data.company !== undefined) updatedCompany = String(data.company);
@@ -142,9 +155,7 @@ const updateJobPosting = async (id, jobPostingData = {}, isPartial = false) => {
   } else {
     const rawUserId = data.user_id !== undefined ? data.user_id : data.userId;
     if (rawUserId !== undefined) {
-      updatedUserId = (rawUserId !== null && rawUserId !== '' && !isNaN(Number(rawUserId)))
-        ? Number(rawUserId)
-        : null;
+      updatedUserId = parsePositiveIntegerId(rawUserId);
     }
     updatedTitle = data.title !== undefined ? String(data.title) : '';
     updatedCompany = data.company !== undefined ? String(data.company) : '';
@@ -190,10 +201,10 @@ const patchJobPosting = async (id, partialData) => {
  * @returns {Promise<boolean>} True if deleted, false if job posting not found
  */
 const deleteJobPosting = async (id) => {
-  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+  const jobPostingId = parsePositiveIntegerId(id);
+  if (jobPostingId === null) {
     return false;
   }
-  const jobPostingId = Number(id);
   const pool = await getPool();
   const connection = await pool.getConnection();
 
@@ -267,10 +278,10 @@ const getJobPostingsByContactEmail = async (email) => {
  * @returns {Promise<Array|null>} List of job postings, or null if user does not exist
  */
 const getJobPostingsByUserId = async (userId) => {
-  if (userId === undefined || userId === null || userId === '' || isNaN(Number(userId))) {
+  const targetUserId = parsePositiveIntegerId(userId);
+  if (targetUserId === null) {
     return null;
   }
-  const targetUserId = Number(userId);
   const pool = await getPool();
   const [userRows] = await pool.query(
     'SELECT id, name, email FROM users WHERE id = ? LIMIT 1',

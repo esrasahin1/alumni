@@ -11,10 +11,11 @@ const { renderLoginPage, renderRegisterPage } = require('./src/views/authView');
 const { renderUsersPage } = require('./src/views/userView');
 const { renderAnnouncementsPage } = require('./src/views/announcementView');
 const { renderJobPostingsPage } = require('./src/views/jobPostingView');
-const { renderApplicationsPage } = require('./src/views/applicationView');
+const { renderApplicationsPage, renderMyApplicationsPage } = require('./src/views/applicationView');
 const { renderUserJobsPage } = require('./src/views/userJobsView');
 const { renderAdminDashboard } = require('./src/views/adminView');
 const { renderNotFoundPage } = require('./src/views/notFoundView');
+const { renderProfilePage } = require('./src/views/profileView');
 
 function extractNavbarHtml(html) {
   const match = html.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/i);
@@ -74,11 +75,11 @@ function runNavigationUnitTests() {
     );
     assert.deepStrictEqual(
       getNavItems(studentUser).map((i) => i.href),
-      ['/', '/about', '/users', '/announcements', '/job-postings', '/applications']
+      ['/', '/about', '/users', '/announcements', '/job-postings', '/applications', '/my-applications']
     );
     assert.deepStrictEqual(
       getNavItems(alumniUser).map((i) => i.href),
-      ['/', '/about', '/users', '/announcements', '/job-postings', '/applications', '/users/25/jobs']
+      ['/', '/about', '/users', '/announcements', '/job-postings', '/applications', '/my-applications', '/users/25/jobs']
     );
     assert.deepStrictEqual(
       getNavItems(adminWithAlumniRole).map((i) => i.href),
@@ -120,6 +121,7 @@ function runNavigationUnitTests() {
       { name: 'announcementView', expectedActive: 'Announcements', render: (u) => renderAnnouncementsPage([], u) },
       { name: 'jobPostingView', expectedActive: 'Job Postings', render: (u) => renderJobPostingsPage([], u) },
       { name: 'applicationView', expectedActive: 'Applications', authOnlyActive: true, render: (u) => renderApplicationsPage([], { currentUser: u }) },
+      { name: 'myApplicationsView', expectedActive: 'My Applications', studentAlumniActive: true, render: (u) => renderMyApplicationsPage([], { currentUser: u }) },
       {
         name: 'userJobsView(own)',
         expectedActive: 'Users',
@@ -127,6 +129,7 @@ function runNavigationUnitTests() {
         render: (u) => renderUserJobsPage({ id: 25, name: 'Mert Alumni', email: 'mert@example.com' }, [], u)
       },
       { name: 'adminView', expectedActive: 'Admin Panel', adminOnlyActive: true, render: (u) => renderAdminDashboard({ counts: {}, currentUser: u }) },
+      { name: 'profileView', expectedActive: null, profileActive: true, render: (u) => renderProfilePage({ profile: u || {}, currentUser: u }) },
       { name: 'notFoundView', expectedActive: null, render: (u) => renderNotFoundPage({ originalUrl: '/missing', method: 'GET', user: u }) }
     ];
 
@@ -142,8 +145,10 @@ function runNavigationUnitTests() {
       assert(hasHref(guestNav, '/api/swagger'), `${view.name} Guest must see Swagger UI`);
       assert(!hasHref(guestNav, '/users'), `${view.name} Guest must NOT see Users`);
       assert(!hasHref(guestNav, '/applications'), `${view.name} Guest must NOT see Applications`);
+      assert(!hasHref(guestNav, '/my-applications'), `${view.name} Guest must NOT see My Applications`);
       assert(!guestNav.includes('My Job Postings'), `${view.name} Guest must NOT see My Job Postings`);
       assert(!hasHref(guestNav, '/admin'), `${view.name} Guest must NOT see Admin Panel`);
+      assert(!hasHref(guestNav, '/profile'), `${view.name} Guest must NOT see Profile pill link`);
       assert(!guestNav.includes('action="/logout"'), `${view.name} Guest must NOT see Logout`);
 
       // Student checks
@@ -154,7 +159,9 @@ function runNavigationUnitTests() {
       assert(hasHref(studentNav, '/announcements'), `${view.name} Student must see Announcements`);
       assert(hasHref(studentNav, '/job-postings'), `${view.name} Student must see Job Postings`);
       assert(hasHref(studentNav, '/applications'), `${view.name} Student must see Applications`);
+      assert(hasHref(studentNav, '/my-applications'), `${view.name} Student must see My Applications`);
       assert(hasHref(studentNav, '/api/swagger'), `${view.name} Student must see Swagger UI`);
+      assert(hasHref(studentNav, '/profile'), `${view.name} Student pill must link to /profile`);
       assert(studentNav.includes('Selin Student') && studentNav.includes('>Student<'), `${view.name} Student must see username and Student badge`);
       assert(studentNav.includes('action="/logout"'), `${view.name} Student must see Logout`);
       assert(!studentNav.includes('My Job Postings'), `${view.name} Student must NOT see My Job Postings`);
@@ -169,8 +176,10 @@ function runNavigationUnitTests() {
       assert(hasHref(alumniNav, '/announcements'), `${view.name} Alumni must see Announcements`);
       assert(hasHref(alumniNav, '/job-postings'), `${view.name} Alumni must see Job Postings`);
       assert(hasHref(alumniNav, '/applications'), `${view.name} Alumni must see Applications`);
+      assert(hasHref(alumniNav, '/my-applications'), `${view.name} Alumni must see My Applications`);
       assert(hasHref(alumniNav, '/users/25/jobs') && alumniNav.includes('My Job Postings'), `${view.name} Alumni must see My Job Postings with own ID`);
       assert(hasHref(alumniNav, '/api/swagger'), `${view.name} Alumni must see Swagger UI`);
+      assert(hasHref(alumniNav, '/profile'), `${view.name} Alumni pill must link to /profile`);
       assert(alumniNav.includes('Mert Alumni') && alumniNav.includes('>Alumni<'), `${view.name} Alumni must see username and Alumni badge`);
       assert(alumniNav.includes('action="/logout"'), `${view.name} Alumni must see Logout`);
       assert(!hasHref(alumniNav, '/admin'), `${view.name} Alumni must NOT see Admin Panel`);
@@ -187,10 +196,16 @@ function runNavigationUnitTests() {
         assert(hasHref(adminNav, '/applications'), `${view.name} Admin must see Applications`);
         assert(hasHref(adminNav, '/admin') && adminNav.includes('Admin Panel'), `${view.name} Admin (${adminUser.role}) must see Admin Panel`);
         assert(hasHref(adminNav, '/api/swagger'), `${view.name} Admin must see Swagger UI`);
+        assert(hasHref(adminNav, '/profile'), `${view.name} Admin pill must link to /profile`);
         assert(adminNav.includes(adminUser.name) && adminNav.includes('>Admin<'), `${view.name} Admin must see username and Admin badge`);
         assert(adminNav.includes('action="/logout"'), `${view.name} Admin must see Logout`);
         assert(!adminNav.includes('My Job Postings'), `${view.name} Admin (${adminUser.role}) must NOT see My Job Postings`);
+        assert(!hasHref(adminNav, '/my-applications'), `${view.name} Admin (${adminUser.role}) must NOT see My Applications`);
         assert(!hasHref(adminNav, '/login') && !hasHref(adminNav, '/register'), `${view.name} Admin must NOT see Login/Register`);
+      }
+
+      if (view.profileActive) {
+        assert(studentNav.includes('class="nav-user-pill active" aria-current="page"'), 'profileView should mark user pill active');
       }
 
       // Active link checks
@@ -203,6 +218,9 @@ function runNavigationUnitTests() {
         } else if (view.alumniOwnActive) {
           assert(alumniNav.includes(`class="nav-link active" aria-current="page">${view.alumniOwnActive}</a>`), `${view.name} should mark My Job Postings active for own Alumni`);
           assert(studentNav.includes(`class="nav-link active" aria-current="page">${view.expectedActive}</a>`), `${view.name} should mark Users active for Student`);
+        } else if (view.studentAlumniActive) {
+          assert(studentNav.includes(`class="nav-link active" aria-current="page">${view.expectedActive}</a>`), `${view.name} should mark My Applications active for Student`);
+          assert(alumniNav.includes(`class="nav-link active" aria-current="page">${view.expectedActive}</a>`), `${view.name} should mark My Applications active for Alumni`);
         } else if (!view.authOnlyActive) {
           assert(guestNav.includes(`class="nav-link active" aria-current="page">${view.expectedActive}</a>`), `${view.name} should mark ${view.expectedActive} active for Guest`);
           assert(studentNav.includes(`class="nav-link active" aria-current="page">${view.expectedActive}</a>`), `${view.name} should mark ${view.expectedActive} active for Student`);

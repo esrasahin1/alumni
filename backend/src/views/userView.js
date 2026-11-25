@@ -977,60 +977,64 @@ ${NAV_AUTH_CSS}
  * @param {Object|null} [currentUser=null] - Aktif oturum kullanıcısı
  * @returns {string} HTML içeriği
  */
-const renderUsersPage = (users = [], currentUser = null) => {
-  const userRows = users.length > 0
-    ? users.map(user => `
+const renderUsersPage = (users = [], currentUser = null, options = {}) => {
+  const isAdmin = Boolean((options && options.isAdminView) || (currentUser && currentUser.auth_role === 'admin'));
+  const csrfToken = (options && options.csrfToken) || '';
+  const list = Array.isArray(users) ? users : [];
+
+  const getRoleLabel = (user) => {
+    const r = user && user.role ? String(user.role).toLowerCase() : '';
+    if (r === 'alumni') return 'Alumni';
+    if (r === 'student') return 'Student';
+    return 'Member';
+  };
+
+  const userRows = list.length > 0
+    ? list.map(user => {
+      const isSelf = Boolean(currentUser && Number(currentUser.id) === Number(user.id));
+      const deptMeta = [user.department, user.graduation_year ? `Class of ${user.graduation_year}` : null].filter(Boolean).join(' • ');
+      const roleMeta = `${getRoleLabel(user)}${deptMeta ? ` • ${deptMeta}` : ''}`;
+
+      return `
       <tr>
-        <td><span class="id-pill">#${user.id}</span></td>
+        <td><span class="id-pill">#${escapeHtml(user.id)}</span></td>
         <td>
-          <div style="font-weight: 600; color: var(--soft-white);">${escapeHtml(user.name)}</div>
+          <div style="font-weight: 600; color: var(--soft-white);">
+            <a href="/users/${escapeHtml(user.id)}" style="color: inherit; text-decoration: none;">${escapeHtml(user.name)}</a>
+            ${isSelf ? '<span class="badge badge-success" style="margin-left: 6px; font-size: 11px;">You</span>' : ''}
+          </div>
         </td>
         <td>
-          <div style="color: var(--secondary-text);">${escapeHtml(user.email)}</div>
+          <div style="color: var(--secondary-text);">
+            ${isAdmin && user.email ? escapeHtml(user.email) : escapeHtml(roleMeta)}
+          </div>
         </td>
         <td style="white-space: nowrap; text-align: right;">
-          <a href="/users/${user.id}" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">Details</a>
-          <button type="button" class="btn btn-warning btn-sm" style="margin-right: 4px;" onclick="startEdit(this)" data-id="${user.id}" data-name="${escapeHtml(user.name)}" data-email="${escapeHtml(user.email)}">Edit</button>
-          <button type="button" class="btn btn-danger btn-sm" onclick="deleteUser(${user.id})">Delete</button>
+          <a href="/users/${escapeHtml(user.id)}" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">${isSelf ? 'View Profile' : 'Details'}</a>
+          ${isSelf ? `<a href="/profile" class="btn btn-lime btn-sm" style="margin-right: 4px;">Edit My Profile</a>` : ''}
+          ${isAdmin ? `<button type="button" class="btn btn-warning btn-sm" style="margin-right: 4px;" onclick="startEdit(this)" data-id="${escapeHtml(user.id)}" data-name="${escapeHtml(user.name)}" data-email="${escapeHtml(user.email || '')}">Edit</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="deleteUser(${escapeHtml(user.id)})">Delete</button>` : ''}
         </td>
       </tr>
-    `).join('')
+    `;
+    }).join('')
     : `
       <tr>
         <td colspan="4" style="text-align: center; color: var(--secondary-text); padding: 48px 24px;">
           <div style="font-size: 32px; margin-bottom: 12px;">👥</div>
           <div style="font-size: 16px; font-weight: 600; color: var(--soft-white); margin-bottom: 4px;">Henüz kayıtlı kullanıcı bulunmamaktadır.</div>
-          <div>Yukarıdaki formu kullanarak ilk kullanıcıyı sisteme kaydedebilirsiniz.</div>
+          <div>${isAdmin ? 'Yukarıdaki formu kullanarak ilk kullanıcıyı sisteme kaydedebilirsiniz.' : 'Kayıtlı üyeler burada listelenecektir.'}</div>
         </td>
       </tr>
     `;
 
-  const content = `
-    <!-- Page Header Banner -->
-    <div class="page-header">
-      <div class="page-eyebrow">👥 IDENTITY &amp; ACCESS MANAGEMENT</div>
-      <h1 class="page-headline">User Management <span class="badge badge-navy">User View Layer</span></h1>
-      <p class="page-subtitle">Manage registered alumni, students, and faculty profiles. Perform full CRUD operations with persistent MySQL 8.0 storage.</p>
-    </div>
-
-    <!-- Quick Stats Cards (2-Card Refined Layout) -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-value">${users.length}</div>
-        <div class="stat-label">Registered Users</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">CRUD</div>
-        <div class="stat-label">Available Operations</div>
-        <div class="stat-sublabel">Create &middot; Read &middot; Update &middot; Delete</div>
-      </div>
-    </div>
-
-    <!-- Create / Edit Form Card (DOM IDs Strictly Preserved) -->
+  const adminCreateFormHtml = isAdmin ? `
+    <!-- Create / Edit Form Card (Admin Only) -->
     <div class="card" id="userFormCard" style="margin-bottom: 28px;">
       <h2 id="formTitle" class="card-title" style="margin-top: 0;">➕ Create New User</h2>
-      <p class="card-description">Enter the candidate or alumnus credentials below to register or update records in the database.</p>
+      <p class="card-description">Administrator user creation and account updates with persistent MySQL 8.0 storage.</p>
       <form id="userForm" action="/users" method="POST">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
         <input type="hidden" id="userId" value="">
         <div class="form-group">
           <label for="name">Name:</label>
@@ -1043,30 +1047,21 @@ const renderUsersPage = (users = [], currentUser = null) => {
         <div style="display: flex; gap: 8px; align-items: center; margin-top: 20px;">
           <button type="submit" id="submitBtn" class="btn btn-lime">Add User</button>
           <button type="button" id="cancelBtn" class="btn btn-secondary btn-secondary-dark" style="display: none;" onclick="resetForm()">Cancel</button>
+          <a href="/admin/users" class="btn btn-secondary btn-secondary-dark" style="margin-left: auto;">🛡️ Admin Users Console</a>
         </div>
       </form>
-    </div>
+    </div>` : `
+    <div class="card" style="margin-bottom: 28px; border-color: rgba(109, 140, 255, 0.3);">
+      <h2 class="card-title" style="margin-top: 0;">👥 Alumni &amp; Student Member Directory</h2>
+      <p class="card-description" style="margin-bottom: 14px;">Browse registered alumni and student members in read-only directory mode. Sensitive account details are kept private.</p>
+      <a href="/profile" class="btn btn-lime btn-sm">✏️ Manage My Profile</a>
+    </div>`;
 
-    <!-- User List Section -->
-    <h2 class="table-section-title">📋 User List (${users.length})</h2>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 90px;">ID</th>
-            <th>Name</th>
-            <th>Email</th>
-            <th style="width: 230px; text-align: right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${userRows}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Preserved Client-side Scripts for Form Manipulation & AJAX -->
+  const adminScriptsHtml = isAdmin ? `
+    <!-- Admin Client-side Scripts for Form Manipulation & AJAX (CSRF Protected) -->
     <script>
+      var userCsrfToken = ${JSON.stringify(String(csrfToken || '')).replace(/</g, '\\u003c')};
+
       function startEdit(button) {
         var id = button.getAttribute('data-id');
         var name = button.getAttribute('data-name');
@@ -1097,7 +1092,10 @@ const renderUsersPage = (users = [], currentUser = null) => {
       function deleteUser(id) {
         if (confirm('Are you sure you want to delete user #' + id + '?')) {
           fetch('/users/' + id, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+              'X-CSRF-Token': userCsrfToken
+            }
           })
           .then(function(res) {
             if (res.ok) {
@@ -1126,9 +1124,10 @@ const renderUsersPage = (users = [], currentUser = null) => {
             fetch('/users/' + userId, {
               method: 'PUT',
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': userCsrfToken
               },
-              body: JSON.stringify({ name: name, email: email })
+              body: JSON.stringify({ name: name, email: email, _csrf: userCsrfToken })
             })
             .then(function(res) {
               if (res.ok) {
@@ -1143,10 +1142,53 @@ const renderUsersPage = (users = [], currentUser = null) => {
           }
         });
       });
-    </script>
+    </script>` : '';
+
+  const content = `
+    <!-- Page Header Banner -->
+    <div class="page-header">
+      <div class="page-eyebrow">👥 ${isAdmin ? 'IDENTITY &amp; ACCESS MANAGEMENT' : 'MEMBER DIRECTORY'}</div>
+      <h1 class="page-headline">${isAdmin ? 'User Management' : 'Member Directory'} <span class="badge badge-navy">${isAdmin ? 'Admin Controls' : 'Read-Only Directory'}</span></h1>
+      <p class="page-subtitle">${isAdmin ? 'Manage registered alumni, students, and faculty profiles with persistent MySQL 8.0 storage.' : 'View public member profiles across the alumni and student community.'}</p>
+    </div>
+
+    <!-- Quick Stats Cards (2-Card Refined Layout) -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">${list.length}</div>
+        <div class="stat-label">Registered Users</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${isAdmin ? 'CRUD' : 'Directory'}</div>
+        <div class="stat-label">${isAdmin ? 'Available Operations' : 'Access Mode'}</div>
+        <div class="stat-sublabel">${isAdmin ? 'Create &middot; Read &middot; Update &middot; Delete' : 'Read-Only Member Profiles &middot; Privacy Protected'}</div>
+      </div>
+    </div>
+
+    ${adminCreateFormHtml}
+
+    <!-- User List Section -->
+    <h2 class="table-section-title">📋 ${isAdmin ? 'User List' : 'Members'} (${list.length})</h2>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 90px;">ID</th>
+            <th>Name</th>
+            <th>${isAdmin ? 'Email' : 'Profile Info'}</th>
+            <th style="width: 230px; text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${userRows}
+        </tbody>
+      </table>
+    </div>
+
+    ${adminScriptsHtml}
   `;
 
-  return getLayout("User Management", "User View Layer", content, currentUser);
+  return getLayout(isAdmin ? "User Management" : "Member Directory", "User View Layer", content, currentUser);
 };
 
 /**
@@ -1210,45 +1252,55 @@ const renderUserCreatedPage = (user, currentUser = null) => {
  * @param {Object|null} [currentUser=null] - Aktif oturum kullanıcısı
  * @returns {string} HTML içeriği
  */
-const renderUserDetailPage = (user, currentUser = null) => {
+const renderUserDetailPage = (user, currentUser = null, options = {}) => {
+  const isAdmin = Boolean((options && options.isAdmin) || (currentUser && currentUser.auth_role === 'admin'));
+  const isSelf = Boolean((options && options.isSelf) || (currentUser && user && Number(currentUser.id) === Number(user.id)));
+  const accountTypeLabel = user && user.role
+    ? (String(user.role).toLowerCase() === 'alumni' ? 'Alumni' : 'Student')
+    : 'Alumnus / Student Member';
+
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
       <span>/</span>
       <a href="/users">Users</a>
       <span>/</span>
-      <span>User #${user.id}</span>
+      <span>User #${escapeHtml(user.id)}</span>
     </div>
 
     <div class="page-header">
       <div class="page-eyebrow">👤 MEMBER PROFILE OVERVIEW</div>
-      <h1 class="page-headline">User Details <span class="badge badge-navy">Read (R)</span></h1>
-      <p class="page-subtitle">Detailed account attributes and system persistence records for member #${user.id}.</p>
+      <h1 class="page-headline">User Details <span class="badge badge-navy">${isSelf ? 'Your Profile' : (isAdmin ? 'Admin View' : 'Public Profile')}</span></h1>
+      <p class="page-subtitle">Publicly appropriate profile details for member #${escapeHtml(user.id)}.</p>
     </div>
 
     <div class="card">
       <div class="info-list">
         <div class="info-item">
           <span class="info-label">Database ID:</span>
-          <span class="id-pill">#${user.id}</span>
+          <span class="id-pill">#${escapeHtml(user.id)}</span>
         </div>
         <div class="info-item">
           <span class="info-label">Full Name:</span>
           <strong>${escapeHtml(user.name)}</strong>
         </div>
+        ${(isAdmin || isSelf) && user.email ? `
         <div class="info-item">
           <span class="info-label">Email Address:</span>
           <span>${escapeHtml(user.email)}</span>
+        </div>` : ''}
+        <div class="info-item">
+          <span class="info-label">Account Type:</span>
+          <span class="badge badge-navy">${escapeHtml(accountTypeLabel)}</span>
         </div>
-        ${user.role || user.department ? `
         <div class="info-item">
-          <span class="info-label">Role / Dept:</span>
-          <span>${escapeHtml(user.role || user.department)}</span>
-        </div>` : `
+          <span class="info-label">Department:</span>
+          <span>${escapeHtml(user.department || 'Not specified')}</span>
+        </div>
         <div class="info-item">
-          <span class="info-label">Role / Dept:</span>
-          <span style="color: var(--secondary-text);">Alumnus / Student Member</span>
-        </div>`}
+          <span class="info-label">Graduation Year:</span>
+          <span>${escapeHtml(user.graduation_year || 'Not specified')}</span>
+        </div>
         ${user.created_at ? `
         <div class="info-item">
           <span class="info-label">Member Since:</span>
@@ -1258,9 +1310,10 @@ const renderUserDetailPage = (user, currentUser = null) => {
     </div>
 
     <div class="actions-cluster">
-      <a href="/users" class="btn btn-lime">📋 Kullanıcı Listesine Dön</a>
-      <a href="/users/${user.id}/jobs" class="btn btn-secondary btn-secondary-dark">💼 Kullanıcının İş İlanları</a>
-      <a href="/api/users/${user.id}" target="_blank" class="btn btn-secondary btn-secondary-dark">⚡ View JSON API ↗</a>
+      <a href="/users" class="btn btn-secondary btn-secondary-dark">📋 Kullanıcı Listesine Dön</a>
+      ${isSelf ? `<a href="/profile" class="btn btn-lime">✏️ Edit My Profile</a>` : ''}
+      ${isAdmin ? `<a href="/admin/users" class="btn btn-warning">🛡️ Manage in Admin Console</a>` : ''}
+      ${(isSelf || isAdmin) ? `<a href="/users/${escapeHtml(user.id)}/jobs" class="btn btn-secondary btn-secondary-dark">💼 ${isSelf ? 'My Job Postings' : 'Kullanıcının İş İlanları'}</a>` : ''}
     </div>
   `;
 

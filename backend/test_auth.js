@@ -223,16 +223,12 @@ async function runTests() {
     assert(helperCookie && helperCookie.cookiePair);
     if (helperCookie.sessionId) trackSessionId(helperCookie.sessionId);
 
-    const legacyRes = await request('/api/users', 'POST', {
+    const legacyUserRecord = await userModel.createUser({
       name: 'Legacy No Password User',
       email: legacyEmail
-    }, { contentType: 'application/json', accept: 'application/json', cookie: helperCookie.cookiePair });
-    if (legacyRes.body && legacyRes.body.id) {
-      trackUserId(legacyRes.body.id);
-    } else {
-      await trackUserByExactEmail(legacyEmail);
-    }
-    assert.strictEqual(legacyRes.status, 201);
+    });
+    assert(legacyUserRecord && legacyUserRecord.id);
+    trackUserId(legacyUserRecord.id);
 
     const legacyLoginRes = await request('/login', 'POST', {
       email: legacyEmail,
@@ -312,23 +308,26 @@ async function runTests() {
     assert(postLogoutHome.rawBody.includes('href="/login"'), 'Logged-out home page should show Login link');
     console.log('✅ Logout session destruction and cookie clearing verified');
 
-    // 10. Existing API routes and response structures remain unchanged
-    console.log('\n--- Test 10: Existing API routes and response shapes unchanged ---');
+    // 10. Protected directory fields & own-vs-other nested jobs scoping
+    console.log('\n--- Test 10: Existing API routes and RBAC scoping verified ---');
     const apiUsersRes = await request('/api/users', 'GET', null, { accept: 'application/json', cookie: helperCookie.cookiePair });
     assert.strictEqual(apiUsersRes.status, 200);
     assert(Array.isArray(apiUsersRes.body));
-    const apiLegacyUser = apiUsersRes.body.find((u) => u.id === legacyRes.body.id);
+    const apiLegacyUser = apiUsersRes.body.find((u) => u.id === legacyUserRecord.id);
     assert(apiLegacyUser);
     assert.deepStrictEqual(
       Object.keys(apiLegacyUser).sort(),
-      ['created_at', 'email', 'id', 'name', 'updated_at'],
-      'Existing /api/users response structure must remain unchanged'
+      ['created_at', 'department', 'graduation_year', 'id', 'name', 'role'],
+      'Directory /api/users must return limited safe fields without leaking private email'
     );
 
-    const nestedJobsRes = await request(`/api/users/${legacyRes.body.id}/jobs`, 'GET', null, { accept: 'application/json', cookie: helperCookie.cookiePair });
-    assert.strictEqual(nestedJobsRes.status, 200);
-    assert(Array.isArray(nestedJobsRes.body));
-    console.log('✅ Existing API response structures verified');
+    const crossUserJobsRes = await request(`/api/users/${legacyUserRecord.id}/jobs`, 'GET', null, { accept: 'application/json', cookie: helperCookie.cookiePair });
+    assert.strictEqual(crossUserJobsRes.status, 403, 'Non-admin user must be blocked from another user jobs');
+
+    const ownJobsRes = await request(`/api/users/${storedStudent.id}/jobs`, 'GET', null, { accept: 'application/json', cookie: helperCookie.cookiePair });
+    assert.strictEqual(ownJobsRes.status, 200);
+    assert(Array.isArray(ownJobsRes.body));
+    console.log('✅ Existing API response structures and RBAC scoping verified');
 
     console.log('\n🎉 ALL LOGIN, LOGOUT & SESSION TESTS PASSED SUCCESSFULLY! 🎉\n');
   } catch (err) {

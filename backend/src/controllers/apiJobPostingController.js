@@ -1,4 +1,20 @@
 const jobPostingModel = require('../models/jobPostingModel');
+const { buildAndValidateJobPostingPayload } = require('./jobPostingHelpers');
+const {
+  parsePositiveIntegerId,
+  isAdminUser,
+  isSelfUser
+} = require('./accessHelpers');
+
+function canManageJobPosting(user, jobPosting) {
+  if (!user || !jobPosting) {
+    return false;
+  }
+  if (isAdminUser(user)) {
+    return true;
+  }
+  return jobPosting.user_id !== null && jobPosting.user_id !== undefined && isSelfUser(user, jobPosting.user_id);
+}
 
 /**
  * Controller: /api/job-postings REST API isteklerini ve iş mantığını yönetir (JSON, MySQL)
@@ -6,7 +22,7 @@ const jobPostingModel = require('../models/jobPostingModel');
 
 /**
  * GET /api/job-postings
- * Tüm iş ilanlarını JSON listesi olarak döner.
+ * Publicly lists all job postings.
  */
 const getJobPostings = async (req, res) => {
   try {
@@ -19,17 +35,18 @@ const getJobPostings = async (req, res) => {
 
 /**
  * GET /api/job-postings/:id
- * ID'ye göre tek bir iş ilanını getirir (Bulunamazsa 404, geçersiz ID ise 400 döner).
+ * Publicly returns a single job posting.
  */
 const getJobPosting = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const jobId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
+    if (jobId === null) {
       return res.status(400).json({ message: "Geçersiz veya eksik iş ilanı ID'si" });
     }
 
-    const jobPosting = await jobPostingModel.getJobPostingById(id);
+    const jobPosting = await jobPostingModel.getJobPostingById(jobId);
 
     if (!jobPosting) {
       return res.status(404).json({ message: "İş ilanı bulunamadı" });
@@ -43,29 +60,22 @@ const getJobPosting = async (req, res) => {
 
 /**
  * POST /api/job-postings
- * Yeni bir iş ilanı oluşturur ve JSON döner (201 Created).
+ * Forces user_id = req.user.id for non-admin creators to prevent spoofing.
  */
 const createJobPosting = async (req, res) => {
   try {
-    const body = req && req.body;
-    const title = body && body.title !== undefined ? String(body.title).trim() : '';
-    const company = body && body.company !== undefined ? String(body.company).trim() : '';
+    const jobPayload = buildAndValidateJobPostingPayload(req, {
+      isPartial: false,
+      existingJobPosting: null,
+      isAdmin: isAdminUser(req && req.user)
+    });
 
-    if (!title || !company) {
-      return res.status(400).json({
-        message: "Başlık (title) ve şirket (company) alanları zorunludur."
-      });
-    }
-
-    if (title.length > 120) {
-      return res.status(400).json({
-        message: "İş ilanı başlığı en fazla 120 karakter olabilir."
-      });
-    }
-
-    const newJobPosting = await jobPostingModel.createJobPosting(body);
+    const newJobPosting = await jobPostingModel.createJobPosting(jobPayload);
     res.status(201).json(newJobPosting);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ message: error.message });
+    }
     if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
       return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
     }
@@ -77,34 +87,36 @@ const createJobPosting = async (req, res) => {
 };
 
 /**
- * PUT /api/job-postings/:id
- * Belirtilen ID'deki iş ilanının tüm bilgilerini günceller (ID korunur).
+ * PUT /api/job-postings/:id (Owner or Admin Only)
  */
 const updateJobPosting = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const jobId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
+    if (jobId === null) {
       return res.status(400).json({ message: "Geçersiz veya eksik iş ilanı ID'si" });
     }
 
-    const body = req && req.body;
-    const title = body && body.title !== undefined ? String(body.title).trim() : '';
-    const company = body && body.company !== undefined ? String(body.company).trim() : '';
+    const existingJobPosting = await jobPostingModel.getJobPostingById(jobId);
+    if (!existingJobPosting) {
+      return res.status(404).json({ message: "İş ilanı bulunamadı" });
+    }
 
-    if (!title || !company) {
-      return res.status(400).json({
-        message: "Başlık (title) ve şirket (company) alanları zorunludur."
+    if (!canManageJobPosting(req && req.user, existingJobPosting)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only the job posting owner or an administrator can edit this job posting.'
       });
     }
 
-    if (title.length > 120) {
-      return res.status(400).json({
-        message: "İş ilanı başlığı en fazla 120 karakter olabilir."
-      });
-    }
+    const updatePayload = buildAndValidateJobPostingPayload(req, {
+      isPartial: false,
+      existingJobPosting,
+      isAdmin: isAdminUser(req && req.user)
+    });
 
-    const updatedJobPosting = await jobPostingModel.updateJobPosting(id, body);
+    const updatedJobPosting = await jobPostingModel.updateJobPosting(jobId, updatePayload);
 
     if (!updatedJobPosting) {
       return res.status(404).json({ message: "İş ilanı bulunamadı" });
@@ -112,6 +124,9 @@ const updateJobPosting = async (req, res) => {
 
     res.status(200).json(updatedJobPosting);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ message: error.message });
+    }
     if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
       return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
     }
@@ -123,29 +138,36 @@ const updateJobPosting = async (req, res) => {
 };
 
 /**
- * PATCH /api/job-postings/:id
- * Belirtilen ID'deki iş ilanının sadece gönderilen alanlarını kısmi olarak günceller.
+ * PATCH /api/job-postings/:id (Owner or Admin Only)
  */
 const patchJobPosting = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const jobId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
+    if (jobId === null) {
       return res.status(400).json({ message: "Geçersiz veya eksik iş ilanı ID'si" });
     }
 
-    const body = req && req.body;
-    if (body && body.title !== undefined) {
-      const title = String(body.title).trim();
-      if (!title) {
-        return res.status(400).json({ message: "Başlık (title) boş olamaz." });
-      }
-      if (title.length > 120) {
-        return res.status(400).json({ message: "İş ilanı başlığı en fazla 120 karakter olabilir." });
-      }
+    const existingJobPosting = await jobPostingModel.getJobPostingById(jobId);
+    if (!existingJobPosting) {
+      return res.status(404).json({ message: "İş ilanı bulunamadı" });
     }
 
-    const updatedJobPosting = await jobPostingModel.patchJobPosting(id, req && req.body);
+    if (!canManageJobPosting(req && req.user, existingJobPosting)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only the job posting owner or an administrator can edit this job posting.'
+      });
+    }
+
+    const patchPayload = buildAndValidateJobPostingPayload(req, {
+      isPartial: true,
+      existingJobPosting,
+      isAdmin: isAdminUser(req && req.user)
+    });
+
+    const updatedJobPosting = await jobPostingModel.patchJobPosting(jobId, patchPayload);
 
     if (!updatedJobPosting) {
       return res.status(404).json({ message: "İş ilanı bulunamadı" });
@@ -153,6 +175,9 @@ const patchJobPosting = async (req, res) => {
 
     res.status(200).json(updatedJobPosting);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ message: error.message });
+    }
     if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
       return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
     }
@@ -164,18 +189,30 @@ const patchJobPosting = async (req, res) => {
 };
 
 /**
- * DELETE /api/job-postings/:id
- * Belirtilen ID'deki iş ilanını siler (204 No Content veya 404 Not Found döner).
+ * DELETE /api/job-postings/:id (Owner or Admin Only)
  */
 const deleteJobPosting = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const jobId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
+    if (jobId === null) {
       return res.status(400).json({ message: "Geçersiz veya eksik iş ilanı ID'si" });
     }
 
-    const isDeleted = await jobPostingModel.deleteJobPosting(id);
+    const existingJobPosting = await jobPostingModel.getJobPostingById(jobId);
+    if (!existingJobPosting) {
+      return res.status(404).json({ message: "İş ilanı bulunamadı" });
+    }
+
+    if (!canManageJobPosting(req && req.user, existingJobPosting)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only the job posting owner or an administrator can delete this job posting.'
+      });
+    }
+
+    const isDeleted = await jobPostingModel.deleteJobPosting(jobId);
 
     if (!isDeleted) {
       return res.status(404).json({ message: "İş ilanı bulunamadı" });
@@ -191,18 +228,25 @@ const deleteJobPosting = async (req, res) => {
 };
 
 /**
- * GET /api/users/:id/jobs
- * Belirli bir kullanıcının oluşturduğu iş ilanlarını döner.
+ * GET /api/users/:id/jobs (Strictly Self or Admin)
  */
 const getUserJobs = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const targetUserId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
+    if (targetUserId === null) {
       return res.status(404).json({ message: "Kullanıcı bulunamadı" });
     }
 
-    const jobPostings = await jobPostingModel.getJobPostingsByUserId(id);
+    if (!isAdminUser(req && req.user) && !isSelfUser(req && req.user, targetUserId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: You can only view your own job postings.'
+      });
+    }
+
+    const jobPostings = await jobPostingModel.getJobPostingsByUserId(targetUserId);
 
     if (jobPostings === null) {
       return res.status(404).json({ message: "Kullanıcı bulunamadı" });

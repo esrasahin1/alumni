@@ -1,4 +1,6 @@
 const announcementModel = require('../models/announcementModel');
+const { buildAnnouncementPayload } = require('./announcementController');
+const { parsePositiveIntegerId, isAdminUser } = require('./accessHelpers');
 
 /**
  * Controller: /api/announcements REST API isteklerini ve iş mantığını yönetir (JSON, MySQL)
@@ -6,7 +8,7 @@ const announcementModel = require('../models/announcementModel');
 
 /**
  * GET /api/announcements
- * Tüm duyuruları JSON listesi olarak döner.
+ * Public read access.
  */
 const getAnnouncements = async (req, res) => {
   try {
@@ -19,17 +21,17 @@ const getAnnouncements = async (req, res) => {
 
 /**
  * GET /api/announcements/:id
- * ID'ye göre tek bir duyuruyu getirir (Bulunamazsa 404, geçersiz ID ise 400 döner).
+ * Public read access.
  */
 const getAnnouncement = async (req, res) => {
   try {
-    const id = req && req.params && req.params.id;
+    const announcementId = parsePositiveIntegerId(req && req.params && req.params.id);
 
-    if (!id || isNaN(Number(id))) {
+    if (announcementId === null) {
       return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
     }
 
-    const announcement = await announcementModel.getAnnouncementById(id);
+    const announcement = await announcementModel.getAnnouncementById(announcementId);
 
     if (!announcement) {
       return res.status(404).json({ message: "Duyuru bulunamadı" });
@@ -42,31 +44,47 @@ const getAnnouncement = async (req, res) => {
 };
 
 /**
- * POST /api/announcements
- * Yeni bir duyuru oluşturur ve JSON döner (201 Created).
+ * POST /api/announcements (Admin Only)
  */
 const createAnnouncement = async (req, res) => {
   try {
-    const newAnnouncement = await announcementModel.createAnnouncement(req && req.body);
+    if (!isAdminUser(req && req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only administrators can create announcements.'
+      });
+    }
+
+    const payload = buildAnnouncementPayload(req && req.body, false);
+    const newAnnouncement = await announcementModel.createAnnouncement(payload);
     res.status(201).json(newAnnouncement);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
- * PUT /api/announcements/:id
- * Belirtilen ID'deki duyurunun tüm bilgilerini günceller (ID korunur).
+ * PUT /api/announcements/:id (Admin Only)
  */
 const updateAnnouncement = async (req, res) => {
   try {
-    const id = req && req.params && req.params.id;
+    if (!isAdminUser(req && req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only administrators can edit announcements.'
+      });
+    }
 
-    if (!id || isNaN(Number(id))) {
+    const announcementId = parsePositiveIntegerId(req && req.params && req.params.id);
+    if (announcementId === null) {
       return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
     }
 
-    const updatedAnnouncement = await announcementModel.updateAnnouncement(id, req && req.body);
+    const payload = buildAnnouncementPayload(req && req.body, false);
+    const updatedAnnouncement = await announcementModel.updateAnnouncement(announcementId, payload);
 
     if (!updatedAnnouncement) {
       return res.status(404).json({ message: "Duyuru bulunamadı" });
@@ -74,23 +92,32 @@ const updateAnnouncement = async (req, res) => {
 
     res.status(200).json(updatedAnnouncement);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
- * PATCH /api/announcements/:id
- * Belirtilen ID'deki duyurunun sadece gönderilen alanlarını kısmi olarak günceller.
+ * PATCH /api/announcements/:id (Admin Only)
  */
 const patchAnnouncement = async (req, res) => {
   try {
-    const id = req && req.params && req.params.id;
+    if (!isAdminUser(req && req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only administrators can edit announcements.'
+      });
+    }
 
-    if (!id || isNaN(Number(id))) {
+    const announcementId = parsePositiveIntegerId(req && req.params && req.params.id);
+    if (announcementId === null) {
       return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
     }
 
-    const updatedAnnouncement = await announcementModel.patchAnnouncement(id, req && req.body);
+    const payload = buildAnnouncementPayload(req && req.body, true);
+    const updatedAnnouncement = await announcementModel.patchAnnouncement(announcementId, payload);
 
     if (!updatedAnnouncement) {
       return res.status(404).json({ message: "Duyuru bulunamadı" });
@@ -98,23 +125,31 @@ const patchAnnouncement = async (req, res) => {
 
     res.status(200).json(updatedAnnouncement);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
- * DELETE /api/announcements/:id
- * Belirtilen ID'deki duyuruyu siler (204 No Content veya 404 Not Found döner).
+ * DELETE /api/announcements/:id (Admin Only)
  */
 const deleteAnnouncement = async (req, res) => {
   try {
-    const id = req && req.params && req.params.id;
+    if (!isAdminUser(req && req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only administrators can delete announcements.'
+      });
+    }
 
-    if (!id || isNaN(Number(id))) {
+    const announcementId = parsePositiveIntegerId(req && req.params && req.params.id);
+    if (announcementId === null) {
       return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
     }
 
-    const isDeleted = await announcementModel.deleteAnnouncement(id);
+    const isDeleted = await announcementModel.deleteAnnouncement(announcementId);
 
     if (!isDeleted) {
       return res.status(404).json({ message: "Duyuru bulunamadı" });

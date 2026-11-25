@@ -340,6 +340,39 @@ const normalizeOptionalGraduationYear = (graduationYear) => {
 };
 
 /**
+ * Returns safe user directory rows (excluding password_hash) with role, department, and graduation_year.
+ * @returns {Promise<Array>}
+ */
+const getDirectoryUsers = async () => {
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    'SELECT id, name, email, role, auth_role, department, graduation_year, created_at, updated_at FROM users ORDER BY id ASC'
+  );
+  return rows;
+};
+
+/**
+ * Finds a single directory user by strict positive integer ID (excluding password_hash).
+ * @param {number|string} id
+ * @returns {Promise<Object|null>}
+ */
+const getDirectoryUserById = async (id) => {
+  if (typeof id !== 'number' && typeof id !== 'string') {
+    return null;
+  }
+  const normalizedId = typeof id === 'number' ? id : (/^\d+$/.test(id.trim()) ? Number(id.trim()) : NaN);
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    return null;
+  }
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    'SELECT id, name, email, role, auth_role, department, graduation_year, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
+    [normalizedId]
+  );
+  return rows.length > 0 ? rows[0] : null;
+};
+
+/**
  * Returns all users for the Admin Panel (never exposes password_hash).
  * @returns {Promise<Array>}
  */
@@ -366,6 +399,68 @@ const getUserAdminById = async (id) => {
     [Number(id)]
   );
   return rows.length > 0 ? rows[0] : null;
+};
+
+/**
+ * Returns safe personal profile details for the authenticated user (never exposes password_hash).
+ * @param {number|string} id
+ * @returns {Promise<Object|null>}
+ */
+const getProfileById = async (id) => {
+  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+    return null;
+  }
+  const userId = Number(id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return null;
+  }
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    'SELECT id, name, email, role, auth_role, department, graduation_year, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
+    [userId]
+  );
+  return rows.length > 0 ? rows[0] : null;
+};
+
+/**
+ * Updates only safe self-editable profile fields (name, department, graduation_year) for the user's own account.
+ * Never modifies role, auth_role, email, or password_hash.
+ * @param {number|string} id
+ * @param {Object} profileData
+ * @returns {Promise<Object|null>}
+ */
+const updateOwnProfile = async (id, profileData = {}) => {
+  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+    return null;
+  }
+  const userId = Number(id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return null;
+  }
+
+  const data = profileData && typeof profileData === 'object' ? profileData : {};
+  const normalizedName = typeof data.name === 'string' ? data.name.trim() : '';
+  if (!normalizedName || normalizedName.length > 255) {
+    throw createModelError('VALIDATION_ERROR', 'Name must be between 1 and 255 characters.');
+  }
+
+  const normalizedDepartment = normalizeOptionalDepartment(data.department);
+  if (normalizedDepartment !== null && normalizedDepartment.length > 150) {
+    throw createModelError('VALIDATION_ERROR', 'Department must be at most 150 characters.');
+  }
+
+  const normalizedGraduationYear = normalizeOptionalGraduationYear(data.graduation_year);
+
+  const pool = await getPool();
+  const [result] = await pool.query(
+    'UPDATE users SET name = ?, department = ?, graduation_year = ? WHERE id = ?',
+    [normalizedName, normalizedDepartment, normalizedGraduationYear, userId]
+  );
+  if (!result || result.affectedRows === 0) {
+    return null;
+  }
+
+  return await getProfileById(userId);
 };
 
 /**
@@ -674,11 +769,15 @@ module.exports = {
   ALLOWED_AUTH_ROLES,
   getAllUsers,
   getUserById,
+  getDirectoryUsers,
+  getDirectoryUserById,
+  getProfileById,
   getSessionUserById,
   getUserByEmail,
   createUser,
   createRegisteredUser,
   updateUser,
+  updateOwnProfile,
   patchUser,
   deleteUser,
   getAllUsersAdmin,

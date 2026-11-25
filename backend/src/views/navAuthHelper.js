@@ -20,6 +20,15 @@ const NAV_AUTH_CSS = `
       font-size: 13px;
       font-weight: 600;
       white-space: nowrap;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .nav-user-pill:hover,
+    .nav-user-pill.active {
+      background: rgba(109, 140, 255, 0.24);
+      border-color: var(--electric-blue, #6D8CFF);
+      color: #ffffff;
     }
 
     .nav-role-badge {
@@ -169,6 +178,15 @@ function getNavItems(currentUser = null) {
     { key: 'applications', href: '/applications', label: 'Applications' }
   ];
 
+  // Student & Alumni receive My Applications; Alumni additionally receive My Job Postings.
+  if (navRole === 'student' || navRole === 'alumni') {
+    items.push({
+      key: 'my-applications',
+      href: '/my-applications',
+      label: 'My Applications'
+    });
+  }
+
   // Only Alumni (non-admin) receive the dedicated My Job Postings shortcut.
   if (navRole === 'alumni') {
     const safeUserId = getSafeUserId(currentUser);
@@ -222,8 +240,11 @@ function renderNavAuthItems(currentUser = null, escapeHtml = defaultEscapeHtml, 
     : '';
   const displayName = safeEscape(currentUser.name || currentUser.email || 'User');
   const titleEmail = safeEscape(currentUser.email || '');
+  const profileActive = activeNav === 'profile' ? ' active' : '';
+  const profileCurrent = activeNav === 'profile' ? ' aria-current="page"' : '';
+  const pillTitle = titleEmail ? `${titleEmail} — My Profile` : 'My Profile';
 
-  const authNavItems = `<span class="nav-user-pill" title="${titleEmail}">👤 ${displayName}${badgeHtml}</span>
+  const authNavItems = `<a href="/profile" class="nav-user-pill${profileActive}"${profileCurrent} title="${pillTitle}">👤 ${displayName}${badgeHtml}</a>
         <form action="/logout" method="POST" style="display:inline; margin:0;">
           <button type="submit" class="nav-link nav-logout-btn">Logout</button>
         </form>`;

@@ -17,6 +17,8 @@
  * - Subtle Border:  #35445D (1px hairline contours and dividers)
  */
 
+const { isValidHttpUrl } = require('../controllers/applicationHelpers');
+
 /**
  * Filters HTML special characters to prevent Cross-Site Scripting (XSS).
  *
@@ -78,7 +80,7 @@ const formatDate = (dateInput, fallback = '-') => {
  * @param {string} content - Page body HTML content
  * @returns {string} Complete HTML document
  */
-const getLayout = (title, badgeText, content, currentUser = null) => `<!DOCTYPE html>
+const getLayout = (title, badgeText, content, currentUser = null, activeNav = 'applications') => `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -946,9 +948,9 @@ ${NAV_AUTH_CSS}
         </svg>
       </button>
 
-      <!-- Desktop & Mobile Navigation Links (Applications Clearly Marked Active) -->
+      <!-- Desktop & Mobile Navigation Links -->
       <nav class="nav-menu" id="nav-menu" aria-label="Main Navigation">
-        ${renderNavbarLinks({ currentUser, activeNav: 'applications', escapeHtml })}
+        ${renderNavbarLinks({ currentUser, activeNav, escapeHtml })}
       </nav>
     </div>
   </header>
@@ -1047,17 +1049,37 @@ const getStatusBadge = (status) => {
  * @param {Object} options - Options object, e.g. { jobPosting: { id, title, company, ... } }
  * @returns {string} HTML content
  */
+const renderSafeResumeLink = (url, { asButton = false } = {}) => {
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    return asButton
+      ? '<span style="color: #8392a8;">No resume URL provided</span>'
+      : '<span style="color: #5d6f8a;">None</span>';
+  }
+  const trimmed = url.trim();
+  if (!isValidHttpUrl(trimmed)) {
+    return `<span style="color: #f87171;" title="Unsafe URL blocked">${escapeHtml(trimmed)} (Unsafe URL blocked)</span>`;
+  }
+  const safeEscapedUrl = escapeHtml(trimmed);
+  if (asButton) {
+    return `<a href="${safeEscapedUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-lime btn-sm">📄 Open Resume / Portfolio Link</a>`;
+  }
+  return `<a href="${safeEscapedUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--electric-blue); text-decoration: underline;">Resume Link</a>`;
+};
+
 const renderApplicationsPage = (applications = [], options = {}) => {
   const isNested = Boolean(options && options.jobPosting);
+  const isAdminView = Boolean(options && options.isAdminView);
+  const currentUser = (options && options.currentUser) || null;
   const job = (options && options.jobPosting) || null;
+  const csrfToken = (options && options.csrfToken) || '';
 
   const headerEyebrow = isNested
     ? `💼 JOB CANDIDATE PIPELINE`
-    : `📝 TALENT &amp; CANDIDATE PIPELINE`;
+    : (isAdminView ? `🛡️ ALL PORTAL APPLICATIONS` : `📋 RECEIVED APPLICATIONS`);
 
   const headerTitle = isNested
     ? `${escapeHtml(job.title)} — Applications`
-    : `Job Applications`;
+    : (isAdminView ? `All Job Applications` : `Applications to Your Job Postings`);
 
   const subHeaderHtml = isNested
     ? `<p class="page-subtitle">Candidate applications submitted for job posting <strong>#${escapeHtml(job.id)} — ${escapeHtml(job.company)}</strong>.</p>
@@ -1065,15 +1087,26 @@ const renderApplicationsPage = (applications = [], options = {}) => {
          <a href="/job-postings/${escapeHtml(job.id)}" class="btn btn-secondary btn-secondary-dark btn-sm">← Back to Job Details</a>
          <a href="#apply" class="btn btn-lime btn-sm">✍️ Submit Application for this Job</a>
        </div>`
-    : `<p class="page-subtitle">Manage candidate submissions, track candidate profiles, and review application statuses across all active job postings.</p>
-       <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
-         <a href="/job-postings" class="btn btn-secondary btn-secondary-dark btn-sm">💼 Browse All Job Postings</a>
-         <a href="#apply" class="btn btn-lime btn-sm">➕ Submit New Application</a>
-       </div>`;
+    : (isAdminView
+      ? `<p class="page-subtitle">Administrator view of all candidate submissions across active job postings.</p>
+         <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+           <a href="/admin/applications" class="btn btn-secondary btn-secondary-dark btn-sm">🛡️ Open Admin Applications Console</a>
+           <a href="/job-postings" class="btn btn-secondary btn-secondary-dark btn-sm">💼 Browse All Job Postings</a>
+           <a href="#apply" class="btn btn-lime btn-sm">➕ Submit New Application</a>
+         </div>`
+      : `<p class="page-subtitle">Review candidate applications submitted to job postings published by your account. To track jobs you applied to, visit <a href="/my-applications" style="color: var(--lime); text-decoration: underline;">My Applications</a>.</p>
+         <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+           <a href="/my-applications" class="btn btn-secondary btn-secondary-dark btn-sm">📝 My Applications</a>
+           <a href="/job-postings" class="btn btn-secondary btn-secondary-dark btn-sm">💼 Browse Job Postings</a>
+           <a href="#apply" class="btn btn-lime btn-sm">➕ Submit Application</a>
+         </div>`);
 
   const postTargetUrl = isNested
     ? `/job-postings/${escapeHtml(job.id)}/applications`
     : `/applications`;
+
+  const prefillName = currentUser && currentUser.name ? escapeHtml(currentUser.name) : '';
+  const prefillEmail = currentUser && currentUser.email ? escapeHtml(currentUser.email) : '';
 
   const rows = applications && applications.length > 0
     ? applications.map(app => `
@@ -1081,7 +1114,7 @@ const renderApplicationsPage = (applications = [], options = {}) => {
         <td><span class="id-pill">#${escapeHtml(app.id)}</span></td>
         <td>
           <a href="/job-postings/${escapeHtml(app.job_posting_id)}" style="color: var(--electric-blue); font-weight: 600; text-decoration: none;">
-            #${escapeHtml(app.job_posting_id)}
+            #${escapeHtml(app.job_posting_id)}${app.job_title ? ` — ${escapeHtml(app.job_title)}` : ''}
           </a>
         </td>
         <td>
@@ -1091,7 +1124,7 @@ const renderApplicationsPage = (applications = [], options = {}) => {
         </td>
         <td>${escapeHtml(app.applicant_email)}</td>
         <td>${getStatusBadge(app.status)}</td>
-        <td>${app.resume_url ? `<a href="${escapeHtml(app.resume_url)}" target="_blank" rel="noopener" style="color: var(--electric-blue); text-decoration: underline;">Resume Link</a>` : '<span style="color: #5d6f8a;">None</span>'}</td>
+        <td>${renderSafeResumeLink(app.resume_url, { asButton: false })}</td>
         <td><small style="color: #8392a8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${escapeHtml(formatDate(app.createdAt || app.createdDate || app.created_at))}</small></td>
         <td style="white-space: nowrap; text-align: right;">
           <a href="/applications/${escapeHtml(app.id)}" class="btn btn-secondary btn-secondary-dark btn-sm">View &amp; Manage</a>
@@ -1102,8 +1135,8 @@ const renderApplicationsPage = (applications = [], options = {}) => {
       <tr>
         <td colspan="8" style="text-align: center; color: var(--secondary-text); padding: 48px 24px;">
           <div style="font-size: 32px; margin-bottom: 12px;">📝</div>
-          <div style="font-size: 16px; font-weight: 600; color: var(--soft-white); margin-bottom: 4px;">No applications found.</div>
-          <div>You can submit the first candidate application using the form below.</div>
+          <div style="font-size: 16px; font-weight: 600; color: var(--soft-white); margin-bottom: 4px;">No candidate applications found.</div>
+          <div>${isNested || isAdminView ? 'Applications submitted for this scope will appear here.' : 'Applications submitted to job postings owned by your account will appear here.'}</div>
         </td>
       </tr>
     `;
@@ -1162,6 +1195,7 @@ const renderApplicationsPage = (applications = [], options = {}) => {
       <p class="card-description">Apply directly for an open opportunity or record candidate credentials.</p>
       
       <form action="${postTargetUrl}" method="POST">
+        ${currentUser ? `<input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">` : ''}
         ${isNested ? `<input type="hidden" name="job_posting_id" value="${escapeHtml(job.id)}">` : `
         <div class="form-grid">
           <div class="form-group full-width">
@@ -1175,21 +1209,15 @@ const renderApplicationsPage = (applications = [], options = {}) => {
         <div class="form-grid">
           <div class="form-group">
             <label for="applicant_name">Applicant Full Name *</label>
-            <input type="text" id="applicant_name" name="applicant_name" required placeholder="e.g. Jane Doe" />
+            <input type="text" id="applicant_name" name="applicant_name" required value="${prefillName}" placeholder="e.g. Jane Doe" />
           </div>
 
           <div class="form-group">
             <label for="applicant_email">Email Address *</label>
-            <input type="email" id="applicant_email" name="applicant_email" required placeholder="e.g. jane.doe@alumni.edu" />
+            <input type="email" id="applicant_email" name="applicant_email" required value="${prefillEmail}" placeholder="e.g. jane.doe@alumni.edu" />
           </div>
 
-          <div class="form-group">
-            <label for="user_id">User ID (Optional)</label>
-            <input type="number" id="user_id" name="user_id" min="1" placeholder="e.g. 42 (if registered alumnus)" />
-            <span class="char-hint">Optional account ID for registered alumni</span>
-          </div>
-
-          <div class="form-group">
+          <div class="form-group full-width">
             <label for="resume_url">Resume / CV URL (Optional)</label>
             <input type="text" id="resume_url" name="resume_url" placeholder="https://drive.google.com/... or portfolio link" />
           </div>
@@ -1207,7 +1235,116 @@ const renderApplicationsPage = (applications = [], options = {}) => {
     </div>
   `;
 
-  return getLayout(isNested ? `${job.title} — Applications` : 'Job Applications', 'Application View Layer', content, options.currentUser || null);
+  return getLayout(isNested ? `${job.title} — Applications` : 'Job Applications', 'Application View Layer', content, currentUser, isNested ? 'job-postings' : 'applications');
+};
+
+/**
+ * 1b. Personal My Applications page (GET /my-applications)
+ * Shows ONLY the authenticated user's own submitted applications.
+ *
+ * @param {Array} applications
+ * @param {Object} [options={}]
+ * @returns {string}
+ */
+const renderMyApplicationsPage = (applications = [], options = {}) => {
+  const currentUser = (options && options.currentUser) || null;
+  const rows = Array.isArray(applications) ? applications : [];
+
+  const statusCounts = rows.reduce(
+    (acc, app) => {
+      const s = String(app.status || 'PENDING').toUpperCase();
+      if (s === 'ACCEPTED') acc.accepted += 1;
+      else if (s === 'REVIEWING') acc.reviewing += 1;
+      else if (s === 'REJECTED') acc.rejected += 1;
+      else acc.pending += 1;
+      return acc;
+    },
+    { pending: 0, reviewing: 0, accepted: 0, rejected: 0 }
+  );
+
+  const tableRows = rows.length > 0
+    ? rows.map((app) => `
+      <tr>
+        <td><span class="id-pill">#${escapeHtml(app.id)}</span></td>
+        <td>
+          <a href="/job-postings/${escapeHtml(app.job_posting_id)}" style="color: var(--soft-white); font-weight: 600; text-decoration: none; display: inline-block; transition: color 0.2s;" onmouseover="this.style.color='var(--electric-blue)'" onmouseout="this.style.color='var(--soft-white)'">
+            ${escapeHtml(app.job_title || `Job Posting #${app.job_posting_id}`)}
+          </a>
+        </td>
+        <td><span class="badge badge-navy">${escapeHtml(app.job_company || 'Company')}</span></td>
+        <td>${getStatusBadge(app.status)}</td>
+        <td><small style="color: #8392a8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${escapeHtml(formatDate(app.createdAt || app.createdDate || app.created_at))}</small></td>
+        <td style="white-space: nowrap; text-align: right;">
+          <a href="/job-postings/${escapeHtml(app.job_posting_id)}" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">View Job</a>
+          <a href="/applications/${escapeHtml(app.id)}" class="btn btn-secondary btn-secondary-dark btn-sm">Details</a>
+        </td>
+      </tr>
+    `).join('')
+    : `
+      <tr>
+        <td colspan="6" style="text-align: center; color: var(--secondary-text); padding: 48px 24px;">
+          <div style="font-size: 36px; margin-bottom: 12px;">📭</div>
+          <div style="font-size: 17px; font-weight: 700; color: var(--soft-white); margin-bottom: 6px;">You have not submitted any job applications yet.</div>
+          <p style="max-width: 480px; margin: 0 auto 18px; font-size: 14px;">Explore open career opportunities from our alumni network and track your application statuses right here.</p>
+          <a href="/job-postings" class="btn btn-lime btn-sm">💼 Browse Job Postings</a>
+        </td>
+      </tr>
+    `;
+
+  const content = `
+    <div class="breadcrumb-nav">
+      <a href="/">Home</a>
+      <span>/</span>
+      <span>My Applications</span>
+    </div>
+
+    <div class="page-header">
+      <div class="page-eyebrow">📝 PERSONAL APPLICATION TRACKER</div>
+      <h1 class="page-headline">My Applications <span class="badge badge-navy">${rows.length} Total</span></h1>
+      <p class="page-subtitle">Track every job application submitted with your account, check review statuses, and revisit target job postings.</p>
+      <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="/job-postings" class="btn btn-lime btn-sm">💼 Browse Job Postings</a>
+        <a href="/profile" class="btn btn-secondary btn-secondary-dark btn-sm">👤 My Profile</a>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">${rows.length}</div>
+        <div class="stat-label">Submitted Applications</div>
+        <div class="stat-sublabel">Total applications linked to your account</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${statusCounts.pending + statusCounts.reviewing}</div>
+        <div class="stat-label">Active in Review</div>
+        <div class="stat-sublabel">${statusCounts.pending} Pending &middot; ${statusCounts.reviewing} Reviewing &middot; ${statusCounts.accepted} Accepted</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+      <h2 style="font-size: 22px; font-weight: 700; margin: 0; color: var(--soft-white);">📋 Your Submitted Applications (${rows.length})</h2>
+    </div>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Job Title</th>
+            <th>Company</th>
+            <th>Status</th>
+            <th>Submitted Date</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  return getLayout('My Applications', 'Personal Applications', content, currentUser, 'my-applications');
 };
 
 /**
@@ -1216,7 +1353,39 @@ const renderApplicationsPage = (applications = [], options = {}) => {
  * @param {Object} application - Single application object
  * @returns {string} HTML content
  */
-const renderApplicationDetailPage = (application, currentUser = null) => {
+const renderApplicationDetailPage = (application, currentUser = null, access = {}) => {
+  const isAdmin = Boolean(currentUser && currentUser.auth_role === 'admin');
+  const canUpdateStatus = access && access.canUpdateStatus !== undefined ? Boolean(access.canUpdateStatus) : isAdmin;
+  const canDelete = access && access.canDelete !== undefined ? Boolean(access.canDelete) : isAdmin;
+  const isApplicantOwner = Boolean(access && access.isApplicantOwner);
+  const csrfToken = (access && access.csrfToken) || '';
+  const backTarget = isApplicantOwner && !canUpdateStatus ? '/my-applications' : '/applications';
+  const backLabel = isApplicantOwner && !canUpdateStatus ? '← Back to My Applications' : '← Back to Applications';
+
+  const statusManagementHtml = canUpdateStatus
+    ? `
+    <!-- Status Management Card (Job Owner & Admin Only) -->
+    <div class="management-action-card">
+      <h3>⚙️ Application Status Management (PATCH)</h3>
+      <p>Current Status: ${getStatusBadge(application.status)} &bull; Select a new review state to update the candidate pipeline.</p>
+
+      <form id="statusForm" onsubmit="updateStatus(event, ${escapeHtml(application.id)})" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        <label for="statusSelect" style="margin: 0; font-weight: 600; color: var(--soft-white);">Select New Status:</label>
+        <select id="statusSelect" name="status" style="width: auto; min-width: 220px; font-weight: 600;">
+          <option value="PENDING" ${application.status === 'PENDING' ? 'selected' : ''}>⏳ PENDING</option>
+          <option value="REVIEWING" ${application.status === 'REVIEWING' ? 'selected' : ''}>🔍 REVIEWING</option>
+          <option value="ACCEPTED" ${application.status === 'ACCEPTED' ? 'selected' : ''}>✅ ACCEPTED</option>
+          <option value="REJECTED" ${application.status === 'REJECTED' ? 'selected' : ''}>❌ REJECTED</option>
+        </select>
+        <button type="submit" id="updateStatusBtn" class="btn btn-lime">Save Status</button>
+      </form>
+    </div>`
+    : '';
+
+  const deleteBtnHtml = canDelete
+    ? `<button type="button" onclick="deleteApplication(${escapeHtml(application.id)})" class="btn btn-danger">${isApplicantOwner && !isAdmin ? 'Withdraw Application' : 'Delete This Application'}</button>`
+    : '';
+
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1263,16 +1432,14 @@ const renderApplicationDetailPage = (application, currentUser = null) => {
           <span class="info-label">Target Job Posting:</span>
           <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <a href="/job-postings/${escapeHtml(application.job_posting_id)}" class="btn btn-secondary btn-secondary-dark btn-sm">💼 View Job Posting #${escapeHtml(application.job_posting_id)}</a>
-            <a href="/job-postings/${escapeHtml(application.job_posting_id)}/applications" class="btn btn-secondary btn-secondary-dark btn-sm">📋 View All Applications for this Job</a>
+            ${canUpdateStatus ? `<a href="/job-postings/${escapeHtml(application.job_posting_id)}/applications" class="btn btn-secondary btn-secondary-dark btn-sm">📋 View All Applications for this Job</a>` : ''}
           </div>
         </div>
 
         <div class="info-item">
           <span class="info-label">Resume / CV:</span>
           <div>
-            ${application.resume_url 
-              ? `<a href="${escapeHtml(application.resume_url)}" target="_blank" rel="noopener" class="btn btn-lime btn-sm">📄 Open Resume / Portfolio Link</a>` 
-              : '<span style="color: #8392a8;">No resume URL provided</span>'}
+            ${renderSafeResumeLink(application.resume_url, { asButton: true })}
           </div>
         </div>
 
@@ -1293,34 +1460,21 @@ const renderApplicationDetailPage = (application, currentUser = null) => {
       <div style="white-space: pre-wrap; line-height: 1.7; color: var(--soft-white); background: rgba(16, 24, 39, 0.5); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--subtle-border); font-size: 14px;">${escapeHtml(application.cover_letter || 'No cover letter provided.')}</div>
     </div>
 
-    <!-- Status Management Card (DOM IDs Strictly Preserved) -->
-    <div class="management-action-card">
-      <h3>⚙️ Application Status Management (PATCH)</h3>
-      <p>Current Status: ${getStatusBadge(application.status)} &bull; Select a new review state to update the candidate pipeline.</p>
-      
-      <form id="statusForm" onsubmit="updateStatus(event, ${escapeHtml(application.id)})" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-        <label for="statusSelect" style="margin: 0; font-weight: 600; color: var(--soft-white);">Select New Status:</label>
-        <select id="statusSelect" name="status" style="width: auto; min-width: 220px; font-weight: 600;">
-          <option value="PENDING" ${application.status === 'PENDING' ? 'selected' : ''}>⏳ PENDING</option>
-          <option value="REVIEWING" ${application.status === 'REVIEWING' ? 'selected' : ''}>🔍 REVIEWING</option>
-          <option value="ACCEPTED" ${application.status === 'ACCEPTED' ? 'selected' : ''}>✅ ACCEPTED</option>
-          <option value="REJECTED" ${application.status === 'REJECTED' ? 'selected' : ''}>❌ REJECTED</option>
-        </select>
-        <button type="submit" id="updateStatusBtn" class="btn btn-lime">Save Status</button>
-      </form>
-    </div>
+    ${statusManagementHtml}
 
     <!-- Bottom Actions Cluster -->
     <div class="actions-cluster" style="justify-content: space-between; align-items: center; margin-top: 28px;">
       <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-        <a href="/applications" class="btn btn-secondary btn-secondary-dark">← Back to All Applications</a>
+        <a href="${backTarget}" class="btn btn-secondary btn-secondary-dark">${backLabel}</a>
         <a href="/job-postings/${escapeHtml(application.job_posting_id)}" class="btn btn-secondary btn-secondary-dark">💼 Target Job (#${escapeHtml(application.job_posting_id)})</a>
       </div>
-      <button type="button" onclick="deleteApplication(${escapeHtml(application.id)})" class="btn btn-danger">Delete This Application</button>
+      ${deleteBtnHtml}
     </div>
 
     <!-- Client-side Status Update & Delete Scripts -->
     <script>
+      var appCsrfToken = ${JSON.stringify(String(csrfToken || '')).replace(/</g, '\\u003c')};
+
       function updateStatus(event, id) {
         event.preventDefault();
         var select = document.getElementById('statusSelect');
@@ -1333,9 +1487,10 @@ const renderApplicationDetailPage = (application, currentUser = null) => {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'X-CSRF-Token': appCsrfToken
           },
-          body: JSON.stringify({ status: newStatus })
+          body: JSON.stringify({ status: newStatus, _csrf: appCsrfToken })
         }).then(function(res) {
           if (!res.ok) throw new Error('HTTP ' + res.status);
           window.location.reload();
@@ -1350,10 +1505,13 @@ const renderApplicationDetailPage = (application, currentUser = null) => {
         if (confirm('Are you sure you want to delete application #' + id + '? This action cannot be undone.')) {
           fetch('/applications/' + id, {
             method: 'DELETE',
-            headers: { 'Accept': 'text/html' }
+            headers: {
+              'Accept': 'text/html',
+              'X-CSRF-Token': appCsrfToken
+            }
           }).then(function(res) {
             if (!res.ok && res.status !== 204) throw new Error('HTTP ' + res.status);
-            window.location.href = '/applications';
+            window.location.href = '${backTarget}';
           }).catch(function(err) {
             alert('Failed to delete application: ' + err.message);
           });
@@ -1437,9 +1595,14 @@ const renderApplicationCreatedPage = (application, currentUser = null) => {
         </div>
       </div>
       <div class="actions-cluster">
-        <a href="/applications/${escapeHtml(application.id)}" class="btn btn-lime">View Application Details</a>
-        <a href="/job-postings/${escapeHtml(application.job_posting_id)}/applications" class="btn btn-secondary btn-secondary-dark">Job Applications</a>
-        <a href="/applications" class="btn btn-secondary btn-secondary-dark">All Applications</a>
+        ${currentUser ? `
+        <a href="/my-applications" class="btn btn-lime">📝 My Applications</a>
+        <a href="/applications/${escapeHtml(application.id)}" class="btn btn-secondary btn-secondary-dark">View Application Details</a>
+        <a href="/job-postings/${escapeHtml(application.job_posting_id)}" class="btn btn-secondary btn-secondary-dark">Back to Job Posting</a>
+        ` : `
+        <a href="/job-postings/${escapeHtml(application.job_posting_id)}" class="btn btn-lime">← Back to Job Posting</a>
+        <a href="/job-postings" class="btn btn-secondary btn-secondary-dark">Browse More Jobs</a>
+        `}
       </div>
     </div>
   `;
@@ -1526,6 +1689,7 @@ module.exports = {
   escapeHtml,
   formatDate,
   renderApplicationsPage,
+  renderMyApplicationsPage,
   renderApplicationDetailPage,
   renderApplicationNotFoundPage,
   renderApplicationCreatedPage,

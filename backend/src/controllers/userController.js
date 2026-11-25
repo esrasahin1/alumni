@@ -2,6 +2,89 @@ const userModel = require('../models/userModel');
 const jobPostingModel = require('../models/jobPostingModel');
 const userView = require('../views/userView');
 const userJobsView = require('../views/userJobsView');
+const { getUserCsrfToken, getJobPostingCsrfToken } = require('../middlewares/mvcCsrfFactory');
+const {
+  escapeHtml,
+  parsePositiveIntegerId,
+  isAdminUser,
+  isSelfUser,
+  prefersJsonResponse,
+  sendForbiddenResponse,
+  sendBadRequestResponse,
+  toPublicDirectoryUser,
+  toSelfOrAdminUser
+} = require('./accessHelpers');
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function buildNonAdminSelfUpdatePayload(body, existingProfile, isPartial) {
+  const input = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+  let nextName = existingProfile.name;
+  if (input.name !== undefined) {
+    if (typeof input.name !== 'string') {
+      const err = new Error('Name must be a valid string.');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    nextName = input.name.trim();
+  } else if (!isPartial) {
+    nextName = '';
+  }
+
+  if (!nextName || nextName.length > 255) {
+    const err = new Error('Name is required and must not exceed 255 characters.');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
+  let nextDepartment = existingProfile.department;
+  if (input.department !== undefined) {
+    if (input.department !== null && typeof input.department !== 'string') {
+      const err = new Error('Department must be a valid string.');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    const trimmedDept = typeof input.department === 'string' ? input.department.trim() : '';
+    if (trimmedDept.length > 150) {
+      const err = new Error('Department must not exceed 150 characters.');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    nextDepartment = trimmedDept !== '' ? trimmedDept : null;
+  } else if (!isPartial) {
+    nextDepartment = null;
+  }
+
+  let nextGradYear = existingProfile.graduation_year;
+  if (input.graduation_year !== undefined) {
+    const rawYear = input.graduation_year;
+    if (rawYear === null || (typeof rawYear === 'string' && rawYear.trim() === '')) {
+      nextGradYear = null;
+    } else if (typeof rawYear === 'number' || typeof rawYear === 'string') {
+      const strYear = String(rawYear).trim();
+      const parsed = /^\d+$/.test(strYear) ? Number(strYear) : NaN;
+      const maxYear = new Date().getFullYear() + 10;
+      if (!Number.isInteger(parsed) || parsed < 1950 || parsed > maxYear) {
+        const err = new Error(`Graduation year must be an integer between 1950 and ${maxYear}.`);
+        err.code = 'VALIDATION_ERROR';
+        throw err;
+      }
+      nextGradYear = parsed;
+    } else {
+      const err = new Error('Graduation year must be a valid year integer.');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+  } else if (!isPartial) {
+    nextGradYear = null;
+  }
+
+  return {
+    name: nextName,
+    department: nextDepartment,
+    graduation_year: nextGradYear
+  };
+}
 
 /**
  * Controller: User işlemlerini ve iş mantığını yönetir (View Layer entegrasyonlu, MySQL destekli)
@@ -9,197 +92,255 @@ const userJobsView = require('../views/userJobsView');
 
 /**
  * GET /users (Kullanıcı Listesi - View Layer)
- * Model'den kullanıcıları alır ve View Layer ile HTML olarak render eder.
+ * Logged-in users see a limited read-only directory; only Admin sees management controls.
  */
 const getUsers = async (req, res) => {
   try {
-    const users = await userModel.getAllUsers();
+    const rawUsers = await userModel.getDirectoryUsers();
+    const isAdmin = isAdminUser(req && req.user);
+    const directoryUsers = rawUsers.map((u) => (isAdmin ? toSelfOrAdminUser(u) : toPublicDirectoryUser(u)));
 
-    // İstemci açıkça sadece JSON talep ederse (API istemcileri için esneklik)
-    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-      return res.status(200).json(users);
+    if (prefersJsonResponse(req)) {
+      return res.status(200).json(directoryUsers);
     }
 
-    // Varsayılan: View Layer üzerinden HTML sayfası render edilir
-    const html = userView.renderUsersPage(users, req.user || null);
+    const html = userView.renderUsersPage(directoryUsers, req.user || null, {
+      isAdminView: isAdmin,
+      csrfToken: getUserCsrfToken(req, res)
+    });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
  * GET /users/:id (Kullanıcı Detayı - View Layer)
- * ID'ye göre tek bir kullanıcıyı getirir.
+ * Displays only public-appropriate profile info to other users; full self info to owner/Admin.
  */
 const getUser = async (req, res) => {
   try {
-    const user = await userModel.getUserById(req.params.id);
+    const id = req && req.params && req.params.id;
+    const rawUser = await userModel.getDirectoryUserById(id);
 
-    if (!user) {
-      if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (!rawUser) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(req.params.id, req.user || null);
+      const html = userView.renderUserNotFoundPage(id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
 
-    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-      return res.status(200).json(user);
+    const isAdmin = isAdminUser(req && req.user);
+    const isSelf = isSelfUser(req && req.user, rawUser.id);
+    const safeUser = (isAdmin || isSelf) ? toSelfOrAdminUser(rawUser) : toPublicDirectoryUser(rawUser);
+
+    if (prefersJsonResponse(req)) {
+      return res.status(200).json(safeUser);
     }
 
-    const html = userView.renderUserDetailPage(user, req.user || null);
+    const html = userView.renderUserDetailPage(safeUser, req.user || null, {
+      isAdmin,
+      isSelf
+    });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
- * POST /users (Yeni Kullanıcı Oluşturma - View Layer)
- * Model üzerinden yeni kullanıcı oluşturur ve View Layer ile HTML sonucu gösterir.
+ * POST /users (Yeni Kullanıcı Oluşturma - Admin Only)
  */
 const createUser = async (req, res) => {
   try {
-    const newUser = await userModel.createUser(req.body);
+    if (!isAdminUser(req && req.user)) {
+      return sendForbiddenResponse(req, res, 'Only administrators can create user accounts.', '/users');
+    }
 
-    // İstemci açıkça sadece JSON talep ederse (API istemcileri için esneklik)
-    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const body = req && req.body && typeof req.body === 'object' ? req.body : {};
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    if (!name || !email || !EMAIL_REGEX.test(email) || name.length > 255 || email.length > 255) {
+      return sendBadRequestResponse(req, res, 'Valid name and email are required.', '/users');
+    }
+
+    const newUser = await userModel.createUser({ name, email });
+
+    if (prefersJsonResponse(req)) {
       return res.status(201).json(newUser);
     }
 
-    // Varsayılan: View Layer üzerinden HTML başarı sayfası render edilir
     const html = userView.renderUserCreatedPage(newUser, req.user || null);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(201).send(html);
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(409).json({ message: "Bu e-posta adresi zaten kullanımda." });
       }
       return res.status(409).send('Hata: Bu e-posta adresi zaten kullanımda.');
     }
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
-/**
- * PUT /users/:id (Tam Güncelleme - View Layer)
- * Belirtilen ID'deki kullanıcının tüm bilgilerini günceller (ID korunur).
- */
-const updateUser = async (req, res) => {
+const handleProfileOrAdminUpdate = async (req, res, isPartial) => {
   try {
-    const updatedUser = await userModel.updateUser(req.params.id, req.body);
-
-    if (!updatedUser) {
-      if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const id = req && req.params && req.params.id;
+    const targetId = parsePositiveIntegerId(id);
+    if (targetId === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(req.params.id, req.user || null);
+      const html = userView.renderUserNotFoundPage(id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
 
-    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-      return res.status(200).json(updatedUser);
+    const isAdmin = isAdminUser(req && req.user);
+    const isSelf = isSelfUser(req && req.user, targetId);
+
+    if (!isAdmin && !isSelf) {
+      return sendForbiddenResponse(req, res, 'You can only update your own profile.', `/users/${targetId}`);
     }
 
-    const html = userView.renderUserUpdatedPage(updatedUser, { isPartial: false, currentUser: req.user || null });
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.status(200).send(html);
-  } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') {
-      if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-        return res.status(409).json({ message: "Bu e-posta adresi zaten kullanımda." });
+    let updatedUser = null;
+    if (isAdmin) {
+      const body = req && req.body && typeof req.body === 'object' ? req.body : {};
+      if (!isPartial) {
+        const name = typeof body.name === 'string' ? body.name.trim() : '';
+        const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+        if (!name || !email || !EMAIL_REGEX.test(email) || name.length > 255 || email.length > 255) {
+          return sendBadRequestResponse(req, res, 'Valid name and email are required.', `/users/${targetId}`);
+        }
+        updatedUser = await userModel.updateUser(targetId, { name, email }, false);
+      } else {
+        const patchData = {};
+        if (body.name !== undefined) {
+          if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 255) {
+            return sendBadRequestResponse(req, res, 'Name must be a non-empty string up to 255 characters.', `/users/${targetId}`);
+          }
+          patchData.name = body.name.trim();
+        }
+        if (body.email !== undefined) {
+          if (typeof body.email !== 'string' || !EMAIL_REGEX.test(body.email.trim()) || body.email.trim().length > 255) {
+            return sendBadRequestResponse(req, res, 'Email must be a valid address.', `/users/${targetId}`);
+          }
+          patchData.email = body.email.trim().toLowerCase();
+        }
+        updatedUser = await userModel.patchUser(targetId, patchData);
       }
-      return res.status(409).send('Hata: Bu e-posta adresi zaten kullanımda.');
+    } else {
+      // Non-admin self: strictly whitelist name, department, graduation_year (never email/role/auth_role/password_hash)
+      const existingProfile = await userModel.getProfileById(targetId);
+      if (!existingProfile) {
+        if (prefersJsonResponse(req)) {
+          return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+        }
+        const html = userView.renderUserNotFoundPage(id, req.user || null);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(404).send(html);
+      }
+      const safePayload = buildNonAdminSelfUpdatePayload(req.body, existingProfile, isPartial);
+      updatedUser = await userModel.updateOwnProfile(targetId, safePayload);
     }
-    res.status(500).send('Internal Server Error: ' + error.message);
-  }
-};
-
-/**
- * PATCH /users/:id (Kısmi Güncelleme - View Layer)
- * Belirtilen ID'deki kullanıcının alanlarını kısmi olarak günceller.
- */
-const patchUser = async (req, res) => {
-  try {
-    const updatedUser = await userModel.patchUser(req.params.id, req.body);
 
     if (!updatedUser) {
-      if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(req.params.id, req.user || null);
+      const html = userView.renderUserNotFoundPage(id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
 
-    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-      return res.status(200).json(updatedUser);
+    const safeResponse = toSelfOrAdminUser(updatedUser);
+    if (prefersJsonResponse(req)) {
+      return res.status(200).json(safeResponse);
     }
 
-    const html = userView.renderUserUpdatedPage(updatedUser, { isPartial: true, currentUser: req.user || null });
+    const html = userView.renderUserUpdatedPage(safeResponse, { isPartial, currentUser: req.user || null });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.status(200).send(html);
+    return res.status(200).send(html);
   } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') {
-      if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return sendBadRequestResponse(req, res, error.message, '/users');
+    }
+    if (error && error.code === 'ER_DUP_ENTRY') {
+      if (prefersJsonResponse(req)) {
         return res.status(409).json({ message: "Bu e-posta adresi zaten kullanımda." });
       }
       return res.status(409).send('Hata: Bu e-posta adresi zaten kullanımda.');
     }
-    res.status(500).send('Internal Server Error: ' + error.message);
+    return res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
+const updateUser = async (req, res) => handleProfileOrAdminUpdate(req, res, false);
+const patchUser = async (req, res) => handleProfileOrAdminUpdate(req, res, true);
+
 /**
- * DELETE /users/:id (Silme - View Layer)
- * Belirtilen ID'deki kullanıcıyı siler.
+ * DELETE /users/:id (Silme - Admin Only)
  */
 const deleteUser = async (req, res) => {
   try {
-    const isDeleted = await userModel.deleteUser(req.params.id);
+    if (!isAdminUser(req && req.user)) {
+      return sendForbiddenResponse(req, res, 'Only administrators can delete user accounts.', '/users');
+    }
 
-    if (!isDeleted) {
-      if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const id = req && req.params && req.params.id;
+    if (parsePositiveIntegerId(id) === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
-      const html = userView.renderUserNotFoundPage(req.params.id, req.user || null);
+      const html = userView.renderUserNotFoundPage(id, req.user || null);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(404).send(html);
     }
 
-    if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const isDeleted = await userModel.deleteUser(id);
+
+    if (!isDeleted) {
+      if (prefersJsonResponse(req)) {
+        return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      }
+      const html = userView.renderUserNotFoundPage(id, req.user || null);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(html);
+    }
+
+    if (prefersJsonResponse(req)) {
       return res.status(204).send();
     }
 
-    const html = userView.renderUserDeletedPage(req.params.id, req.user || null);
+    const html = userView.renderUserDeletedPage(id, req.user || null);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(html);
   } catch (error) {
     if (error && error.code === 'CANNOT_DELETE_LAST_ADMIN') {
-      if (req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(409).json({ success: false, message: error.message });
       }
-      return res.status(409).send(error.message);
+      return res.status(409).send(escapeHtml(error.message));
     }
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
- * GET /users/:id/jobs (Kullanıcının Oluşturduğu İş İlanları - Nested Route / HTML Web & JSON)
+ * GET /users/:id/jobs (Kullanıcının Oluşturduğu İş İlanları - Strictly Self or Admin)
  */
 const getUserJobs = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const targetUserId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
-      if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (targetUserId === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
       const html = userView.renderUserNotFoundPage(id, req.user || null);
@@ -207,9 +348,15 @@ const getUserJobs = async (req, res) => {
       return res.status(404).send(html);
     }
 
-    const user = await userModel.getUserById(id);
+    const isAdmin = isAdminUser(req && req.user);
+    const isSelf = isSelfUser(req && req.user, targetUserId);
+    if (!isAdmin && !isSelf) {
+      return sendForbiddenResponse(req, res, 'You can only view and manage your own job postings.', '/job-postings');
+    }
+
+    const user = await userModel.getDirectoryUserById(targetUserId);
     if (!user) {
-      if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
       const html = userView.renderUserNotFoundPage(id, req.user || null);
@@ -217,10 +364,10 @@ const getUserJobs = async (req, res) => {
       return res.status(404).send(html);
     }
 
-    const jobPostings = await jobPostingModel.getJobPostingsByUserId(id);
+    const jobPostings = await jobPostingModel.getJobPostingsByUserId(targetUserId);
 
     if (jobPostings === null) {
-      if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
       }
       const html = userView.renderUserNotFoundPage(id, req.user || null);
@@ -228,24 +375,27 @@ const getUserJobs = async (req, res) => {
       return res.status(404).send(html);
     }
 
-    // İstemci açıkça sadece JSON talep ederse (Accept: application/json AND NOT text/html)
-    if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(200).json(jobPostings);
     }
 
-    // Web tarayıcıları ve varsayılan: Full Midnight HTML sayfası
-    const html = userJobsView.renderUserJobsPage(user, jobPostings, req.user || null);
+    const html = userJobsView.renderUserJobsPage(toSelfOrAdminUser(user), jobPostings, req.user || null, {
+      canManage: isAdmin || isSelf,
+      isAdminView: isAdmin,
+      csrfToken: getJobPostingCsrfToken(req, res)
+    });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(html);
   } catch (error) {
-    if (req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(500).json({ message: "Sunucu hatası: " + error.message });
     }
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 module.exports = {
+  buildNonAdminSelfUpdatePayload,
   getUsers,
   getUser,
   getUserJobs,

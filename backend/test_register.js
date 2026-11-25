@@ -345,30 +345,31 @@ async function runTests() {
     assert.strictEqual(rejectedBadYearUser, null, 'User with invalid graduation year must NOT be created in DB');
     console.log('✅ Invalid graduation year rejection verified');
 
-    // 12. Existing Users CRUD and nested /api/users/:id/jobs still work
-    console.log('\n--- Test 12: Existing Users CRUD and nested jobs route still work ---');
-    const createCrudRes = await request('/api/users', 'POST', {
-      name: 'CRUD Compat User',
+    // 12. Users RBAC, self-profile update, and own nested /api/users/:id/jobs compatibility
+    console.log('\n--- Test 12: Users RBAC, self-update, and own nested jobs route work ---');
+    const forbiddenCreateRes = await request('/api/users', 'POST', {
+      name: 'Unauthorized Create',
       email: crudEmail
     }, 'application/json', 'application/json', authCookie);
-    if (createCrudRes.body && createCrudRes.body.id) {
-      trackUserId(createCrudRes.body.id);
-    } else {
-      await trackUserByExactEmail(crudEmail);
-    }
-    assert.strictEqual(createCrudRes.status, 201);
-    assert(createCrudRes.body && createCrudRes.body.id);
+    assert.strictEqual(forbiddenCreateRes.status, 403, 'Non-admin user must receive 403 on POST /api/users');
 
-    const nestedJobsRes = await request(`/api/users/${createCrudRes.body.id}/jobs`, 'GET', null, 'application/json', 'application/json', authCookie);
-    assert.strictEqual(nestedJobsRes.status, 200);
-    assert(Array.isArray(nestedJobsRes.body));
+    const ownNestedJobsRes = await request(`/api/users/${storedStudent.id}/jobs`, 'GET', null, 'application/json', 'application/json', authCookie);
+    assert.strictEqual(ownNestedJobsRes.status, 200);
+    assert(Array.isArray(ownNestedJobsRes.body));
 
-    const patchCrudRes = await request(`/api/users/${createCrudRes.body.id}`, 'PATCH', {
-      name: 'CRUD Compat Updated'
+    const otherNestedJobsRes = await request(`/api/users/${storedAlumni.id}/jobs`, 'GET', null, 'application/json', 'application/json', authCookie);
+    assert.strictEqual(otherNestedJobsRes.status, 403, 'Non-admin student must receive 403 on another user jobs');
+
+    const patchSelfRes = await request(`/api/users/${storedStudent.id}`, 'PATCH', {
+      name: 'CRUD Compat Self Updated',
+      role: 'alumni',
+      auth_role: 'admin'
     }, 'application/json', 'application/json', authCookie);
-    assert.strictEqual(patchCrudRes.status, 200);
-    assert.strictEqual(patchCrudRes.body.name, 'CRUD Compat Updated');
-    console.log('✅ Existing Users CRUD and nested jobs route compatibility verified');
+    assert.strictEqual(patchSelfRes.status, 200);
+    assert.strictEqual(patchSelfRes.body.name, 'CRUD Compat Self Updated');
+    assert.strictEqual(patchSelfRes.body.role, 'student', 'role must stay unchanged on self-update');
+    assert.strictEqual(patchSelfRes.body.auth_role, 'user', 'auth_role must not escalate');
+    console.log('✅ Users RBAC, self-update, and own nested jobs route compatibility verified');
 
     console.log('\n🎉 ALL REGISTRATION TESTS PASSED SUCCESSFULLY! 🎉\n');
   } catch (err) {

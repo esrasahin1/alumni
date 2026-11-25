@@ -18,7 +18,10 @@
     "test:auth-middleware": "node test_auth_middleware.js",
     "test:admin": "node test_admin.js",
     "test:admin:unit": "node test_admin_unit.js",
-    "test:nav:unit": "node test_navigation_unit.js"
+    "test:nav:unit": "node test_navigation_unit.js",
+    "test:profile:unit": "node test_profile_unit.js",
+    "test:my-apps:unit": "node test_my_applications_unit.js",
+    "test:phase3:unit": "node test_user_pages_phase3_unit.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

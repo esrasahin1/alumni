@@ -62,16 +62,23 @@ const formatDate = (dateInput, fallback = '-') => {
  * @param {Array} jobPostings - List of job postings created by the user
  * @returns {string} HTML content
  */
-const renderUserJobsPage = (user = {}, jobPostings = [], currentUser = null) => {
+const renderUserJobsPage = (user = {}, jobPostings = [], currentUser = null, options = {}) => {
   const jobs = Array.isArray(jobPostings) ? jobPostings : [];
   const userName = user && user.name ? user.name : `User #${user && user.id ? user.id : 'Unknown'}`;
   const userEmail = user && user.email ? user.email : '-';
   const userId = user && user.id ? user.id : '-';
+  const isAdmin = Boolean(options && options.isAdminView ? options.isAdminView : (currentUser && currentUser.auth_role === 'admin'));
   const isOwnAlumniJobs =
     getUserNavRole(currentUser) === 'alumni' &&
     currentUser &&
     user &&
     Number(currentUser.id) === Number(user.id);
+  const canManage = Boolean(
+    options && options.canManage !== undefined
+      ? options.canManage
+      : (isAdmin || (currentUser && user && Number(currentUser.id) === Number(user.id)))
+  );
+  const csrfToken = (options && options.csrfToken) || '';
   const activeNav = isOwnAlumniJobs ? 'my-jobs' : 'users';
 
   const rows = jobs.length > 0
@@ -88,7 +95,9 @@ const renderUserJobsPage = (user = {}, jobPostings = [], currentUser = null) => 
         <td><small style="color: #8392a8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${escapeHtml(formatDate(job.createdAt || job.createdDate || job.created_at))}</small></td>
         <td style="white-space: nowrap; text-align: right;">
           <a href="/job-postings/${escapeHtml(job.id)}" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">View Details</a>
-          <a href="/job-postings/${escapeHtml(job.id)}/applications" class="btn btn-secondary btn-secondary-dark btn-sm">Applications</a>
+          <a href="/job-postings/${escapeHtml(job.id)}/applications" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">Applications</a>
+          ${canManage ? `<button type="button" onclick="editMyJob(${escapeHtml(JSON.stringify(job))})" class="btn btn-warning btn-sm" style="margin-right: 4px;">Edit</button>
+          <button type="button" onclick="deleteMyJob(${escapeHtml(job.id)})" class="btn btn-danger btn-sm">Delete</button>` : ''}
         </td>
       </tr>
     `).join('')
@@ -97,7 +106,7 @@ const renderUserJobsPage = (user = {}, jobPostings = [], currentUser = null) => 
         <td colspan="6" style="text-align: center; color: var(--secondary-text); padding: 48px 24px;">
           <div style="font-size: 32px; margin-bottom: 12px;">💼</div>
           <div style="font-size: 16px; font-weight: 600; color: var(--soft-white); margin-bottom: 4px;">No job postings found.</div>
-          <div>This user has not published any career opportunities yet.</div>
+          <div>${canManage ? 'Use the form above to publish your first job posting.' : 'This user has not published any career opportunities yet.'}</div>
         </td>
       </tr>
     `;
@@ -552,6 +561,72 @@ ${NAV_AUTH_CSS}
       border-radius: 4px;
     }
 
+    .btn-warning {
+      background-color: var(--warning-amber);
+      color: var(--soft-white);
+      border: none;
+    }
+
+    .btn-warning:hover {
+      background-color: var(--warning-amber-hover);
+      color: var(--soft-white);
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      background-color: var(--danger-red);
+      color: var(--soft-white);
+      border: none;
+    }
+
+    .btn-danger:hover {
+      background-color: var(--danger-red-hover);
+      color: var(--soft-white);
+      transform: translateY(-1px);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .form-group label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--soft-white);
+    }
+
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px 14px;
+      background-color: #162032;
+      border: 1px solid var(--subtle-border);
+      border-radius: var(--radius-sm);
+      color: var(--soft-white);
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(109, 140, 255, 0.2);
+    }
+
     /* Table Styles */
     .table-responsive {
       width: 100%;
@@ -944,6 +1019,42 @@ ${NAV_AUTH_CSS}
         <a href="/api/users/${escapeHtml(userId)}/jobs" target="_blank" class="btn btn-secondary btn-secondary-dark btn-sm">🔌 API JSON Endpoint</a>
       </div>
 
+      ${canManage ? `
+      <div class="card" id="myJobFormCard" style="margin-bottom: 24px;">
+        <h3 id="myJobFormTitle" class="card-title" style="margin-top: 0; font-size: 18px;">➕ Publish or Edit Job Posting</h3>
+        <form id="myJobForm" method="POST" action="/job-postings">
+          <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}" />
+          <input type="hidden" id="myEditJobId" value="" />
+          ${isAdmin ? `<input type="hidden" name="user_id" value="${escapeHtml(userId)}" />` : ''}
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="myJobTitle">Job Title * (Max 120 characters)</label>
+              <input type="text" id="myJobTitle" name="title" required maxlength="120" placeholder="e.g. Backend Engineer" />
+            </div>
+            <div class="form-group">
+              <label for="myJobCompany">Company *</label>
+              <input type="text" id="myJobCompany" name="company" required placeholder="e.g. Alumni Tech" />
+            </div>
+            <div class="form-group">
+              <label for="myJobLocation">Location (Optional)</label>
+              <input type="text" id="myJobLocation" name="location" placeholder="e.g. Istanbul / Remote" />
+            </div>
+            <div class="form-group">
+              <label for="myJobContact">Contact Email (Optional)</label>
+              <input type="email" id="myJobContact" name="contact_email" placeholder="e.g. jobs@company.com" />
+            </div>
+            <div class="form-group full-width">
+              <label for="myJobDescription">Description (Optional)</label>
+              <textarea id="myJobDescription" name="description" rows="3" placeholder="Role details and requirements..."></textarea>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button type="submit" id="myJobSubmitBtn" class="btn btn-lime btn-sm">Publish Job Posting</button>
+            <button type="button" id="myJobCancelBtn" class="btn btn-secondary btn-secondary-dark btn-sm" style="display: none;" onclick="resetMyJobForm()">Cancel Edit</button>
+          </div>
+        </form>
+      </div>` : ''}
+
       <div class="table-responsive">
         <table>
           <thead>
@@ -1013,7 +1124,94 @@ ${NAV_AUTH_CSS}
 
   <!-- Accessible Mobile Menu Toggle Script -->
   <script>
+    var myJobsCsrfToken = ${JSON.stringify(String(csrfToken || '')).replace(/</g, '\\u003c')};
+
+    function editMyJob(job) {
+      var idInput = document.getElementById('myEditJobId');
+      if (!idInput) return;
+      idInput.value = job.id;
+      document.getElementById('myJobTitle').value = job.title || '';
+      document.getElementById('myJobCompany').value = job.company || '';
+      document.getElementById('myJobLocation').value = job.location || job.city || '';
+      document.getElementById('myJobContact').value = job.contact_email || '';
+      document.getElementById('myJobDescription').value = job.description || '';
+      document.getElementById('myJobSubmitBtn').innerText = 'Save Changes';
+      document.getElementById('myJobCancelBtn').style.display = 'inline-flex';
+      document.getElementById('myJobFormTitle').innerText = '✏️ Edit Job Posting (#' + job.id + ')';
+      var card = document.getElementById('myJobFormCard');
+      if (card) card.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function resetMyJobForm() {
+      var idInput = document.getElementById('myEditJobId');
+      if (idInput) idInput.value = '';
+      var form = document.getElementById('myJobForm');
+      if (form) form.reset();
+      var submitBtn = document.getElementById('myJobSubmitBtn');
+      if (submitBtn) submitBtn.innerText = 'Publish Job Posting';
+      var cancelBtn = document.getElementById('myJobCancelBtn');
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      var titleEl = document.getElementById('myJobFormTitle');
+      if (titleEl) titleEl.innerText = '➕ Publish or Edit Job Posting';
+    }
+
+    function deleteMyJob(id) {
+      if (confirm('Are you sure you want to delete job posting #' + id + '?')) {
+        fetch('/job-postings/' + id, {
+          method: 'DELETE',
+          headers: {
+            'Accept': 'application/json',
+            'X-CSRF-Token': myJobsCsrfToken
+          }
+        }).then(function(res) {
+          if (!res.ok && res.status !== 204) {
+            return res.json().catch(function() { return {}; }).then(function(data) {
+              throw new Error(data.message || ('HTTP ' + res.status));
+            });
+          }
+          window.location.reload();
+        }).catch(function(err) {
+          alert('Delete error: ' + err.message);
+        });
+      }
+    }
+
     (function() {
+      var myJobForm = document.getElementById('myJobForm');
+      if (myJobForm) {
+        myJobForm.addEventListener('submit', function(e) {
+          var editId = document.getElementById('myEditJobId').value;
+          if (editId) {
+            e.preventDefault();
+            fetch('/job-postings/' + editId, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-Token': myJobsCsrfToken
+              },
+              body: JSON.stringify({
+                title: document.getElementById('myJobTitle').value,
+                company: document.getElementById('myJobCompany').value,
+                location: document.getElementById('myJobLocation').value,
+                contact_email: document.getElementById('myJobContact').value,
+                description: document.getElementById('myJobDescription').value,
+                _csrf: myJobsCsrfToken
+              })
+            }).then(function(res) {
+              if (!res.ok) {
+                return res.json().catch(function() { return {}; }).then(function(data) {
+                  throw new Error(data.message || ('HTTP ' + res.status));
+                });
+              }
+              window.location.reload();
+            }).catch(function(err) {
+              alert('Update error: ' + err.message);
+            });
+          }
+        });
+      }
+
       var toggleBtn = document.getElementById('mobile-menu-toggle');
       var navMenu = document.getElementById('nav-menu');
       if (toggleBtn && navMenu) {

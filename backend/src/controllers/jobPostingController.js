@@ -1,4 +1,16 @@
 const jobPostingModel = require('../models/jobPostingModel');
+const { getAppCsrfToken } = require('./applicationHelpers');
+const { getJobPostingCsrfToken } = require('../middlewares/mvcCsrfFactory');
+const { buildAndValidateJobPostingPayload } = require('./jobPostingHelpers');
+const {
+  escapeHtml,
+  parsePositiveIntegerId,
+  isAdminUser,
+  isSelfUser,
+  prefersJsonResponse,
+  sendForbiddenResponse,
+  sendBadRequestResponse
+} = require('./accessHelpers');
 
 /**
  * Job Posting View modülünü dinamik ve güvenli bir şekilde yükler.
@@ -12,48 +24,53 @@ const getJobPostingView = () => {
   }
 };
 
-/**
- * Controller: Job Posting işlemlerini ve iş mantığını yönetir (HTML / View Layer, MySQL)
- */
+function canManageJobPosting(user, jobPosting) {
+  if (!user || !jobPosting) {
+    return false;
+  }
+  if (isAdminUser(user)) {
+    return true;
+  }
+  return jobPosting.user_id !== null && jobPosting.user_id !== undefined && isSelfUser(user, jobPosting.user_id);
+}
 
 /**
  * GET /job-postings (İş İlanları Listesi - HTML / View Layer)
- * Model'den iş ilanlarını alır ve View Layer ile HTML olarak render eder.
+ * Publicly viewable; edit/delete controls are shown only to owner or Admin.
  */
 const getJobPostings = async (req, res) => {
   try {
     const jobPostings = await jobPostingModel.getAllJobPostings();
 
-    // İstemci açıkça sadece JSON talep ederse (API istemcileri için esneklik)
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(200).json(jobPostings);
     }
 
-    // View katmanı mevcutsa şablonu render et
     const view = getJobPostingView();
     if (view && typeof view.renderJobPostingsPage === 'function') {
-      const html = view.renderJobPostingsPage(jobPostings, req && req.user ? req.user : null);
+      const html = view.renderJobPostingsPage(jobPostings, req && req.user ? req.user : null, {
+        csrfToken: getJobPostingCsrfToken(req, res)
+      });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanları - Alumni Tracking System</title></head><body><h1>İş İlanları</h1><pre>${JSON.stringify(jobPostings, null, 2)}</pre></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanları - Alumni Tracking System</title></head><body><h1>İş İlanları</h1><pre>${escapeHtml(JSON.stringify(jobPostings, null, 2))}</pre></body></html>`);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
  * GET /job-postings/:id (İş İlanı Detayı - HTML / View Layer)
- * ID'ye göre tek bir iş ilanını getirir (Bulunamazsa 404, geçersiz ID ise 400 döner).
  */
 const getJobPosting = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
 
-    if (!id || isNaN(Number(id))) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (parsePositiveIntegerId(id) === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Geçersiz veya eksik iş ilanı ID'si" });
       }
       const view = getJobPostingView();
@@ -69,7 +86,7 @@ const getJobPosting = async (req, res) => {
     const jobPosting = await jobPostingModel.getJobPostingById(id);
 
     if (!jobPosting) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "İş ilanı bulunamadı" });
       }
       const view = getJobPostingView();
@@ -82,53 +99,42 @@ const getJobPosting = async (req, res) => {
       return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Bulunamadı</title></head><body><h1>İş ilanı bulunamadı</h1></body></html>`);
     }
 
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(200).json(jobPosting);
     }
 
     const view = getJobPostingView();
     if (view && typeof view.renderJobPostingDetailPage === 'function') {
-      const html = view.renderJobPostingDetailPage(jobPosting, req && req.user ? req.user : null);
+      const html = view.renderJobPostingDetailPage(jobPosting, req && req.user ? req.user : null, {
+        csrfToken: getAppCsrfToken(req, res),
+        jobPostingCsrfToken: getJobPostingCsrfToken(req, res)
+      });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>${jobPosting.title || 'İş İlanı Detayı'}</title></head><body><h1>${jobPosting.title}</h1><h2>${jobPosting.company}</h2><p>${jobPosting.description}</p></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>${escapeHtml(jobPosting.title || 'İş İlanı Detayı')}</title></head><body><h1>${escapeHtml(jobPosting.title)}</h1><h2>${escapeHtml(jobPosting.company)}</h2><p>${escapeHtml(jobPosting.description)}</p></body></html>`);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
  * POST /job-postings (Yeni İş İlanı Oluşturma - HTML / View Layer)
- * Model üzerinden yeni iş ilanı oluşturur ve View Layer ile HTML sonucu gösterir.
+ * Non-admin users always have user_id bound to req.user.id (prevents ownership spoofing).
  */
 const createJobPosting = async (req, res) => {
   try {
-    const body = req && req.body;
-    const title = body && body.title !== undefined ? String(body.title).trim() : '';
-    const company = body && body.company !== undefined ? String(body.company).trim() : '';
+    const jobPayload = buildAndValidateJobPostingPayload(req, {
+      isPartial: false,
+      existingJobPosting: null,
+      isAdmin: isAdminUser(req && req.user)
+    });
 
-    if (!title || !company) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-        return res.status(400).json({ message: "Başlık (title) ve şirket (company) alanları zorunludur." });
-      }
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Başlık ve şirket alanları zorunludur.</h1><a href="/job-postings">Geri Dön</a></body></html>');
-    }
+    const newJobPosting = await jobPostingModel.createJobPosting(jobPayload);
 
-    if (title.length > 120) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-        return res.status(400).json({ message: "İş ilanı başlığı en fazla 120 karakter olabilir." });
-      }
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: İş ilanı başlığı en fazla 120 karakter olabilir.</h1><a href="/job-postings">Geri Dön</a></body></html>');
-    }
-
-    const newJobPosting = await jobPostingModel.createJobPosting(body);
-
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(201).json(newJobPosting);
     }
 
@@ -140,36 +146,39 @@ const createJobPosting = async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(201).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Yayınlandı</title></head><body><h1>İş İlanı Başarıyla Yayınlandı</h1><p>ID: ${newJobPosting.id}</p><p>Başlık: ${newJobPosting.title}</p></body></html>`);
+    return res.status(201).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Yayınlandı</title></head><body><h1>İş İlanı Başarıyla Yayınlandı</h1><p>ID: ${escapeHtml(newJobPosting.id)}</p><p>Başlık: ${escapeHtml(newJobPosting.title)}</p></body></html>`);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return sendBadRequestResponse(req, res, error.message, '/job-postings');
+    }
     if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Belirtilen kullanıcı (user_id) sistemde kayıtlı değil.</h1><a href="/job-postings">Geri Dön</a></body></html>');
     }
     if (error && error.code === 'TITLE_TOO_LONG') {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: error.message });
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: ${error.message}</h1><a href="/job-postings">Geri Dön</a></body></html>`);
+      return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: ${escapeHtml(error.message)}</h1><a href="/job-postings">Geri Dön</a></body></html>`);
     }
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
- * PUT /job-postings/:id (Tam Güncelleme - HTML / View Layer)
- * Belirtilen ID'deki iş ilanının tüm bilgilerini günceller (ID korunur).
+ * PUT /job-postings/:id (Tam Güncelleme - Owner or Admin Only)
  */
 const updateJobPosting = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const jobId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (jobId === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Geçersiz veya eksik iş ilanı ID'si" });
       }
       const view = getJobPostingView();
@@ -182,30 +191,9 @@ const updateJobPosting = async (req, res) => {
       return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Geçersiz ID</title></head><body><h1>Geçersiz veya eksik iş ilanı ID'si</h1></body></html>`);
     }
 
-    const body = req && req.body;
-    const title = body && body.title !== undefined ? String(body.title).trim() : '';
-    const company = body && body.company !== undefined ? String(body.company).trim() : '';
-
-    if (!title || !company) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-        return res.status(400).json({ message: "Başlık (title) ve şirket (company) alanları zorunludur." });
-      }
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Başlık ve şirket alanları zorunludur.</h1><a href="/job-postings">Geri Dön</a></body></html>');
-    }
-
-    if (title.length > 120) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-        return res.status(400).json({ message: "İş ilanı başlığı en fazla 120 karakter olabilir." });
-      }
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: İş ilanı başlığı en fazla 120 karakter olabilir.</h1><a href="/job-postings">Geri Dön</a></body></html>');
-    }
-
-    const updatedJobPosting = await jobPostingModel.updateJobPosting(id, req && req.body);
-
-    if (!updatedJobPosting) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const existingJobPosting = await jobPostingModel.getJobPostingById(jobId);
+    if (!existingJobPosting) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "İş ilanı bulunamadı" });
       }
       const view = getJobPostingView();
@@ -218,7 +206,33 @@ const updateJobPosting = async (req, res) => {
       return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Bulunamadı</title></head><body><h1>İş ilanı bulunamadı</h1></body></html>`);
     }
 
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (!canManageJobPosting(req && req.user, existingJobPosting)) {
+      return sendForbiddenResponse(req, res, 'Only the job posting owner or an administrator can edit this job posting.', `/job-postings/${jobId}`);
+    }
+
+    const updatePayload = buildAndValidateJobPostingPayload(req, {
+      isPartial: false,
+      existingJobPosting,
+      isAdmin: isAdminUser(req && req.user)
+    });
+
+    const updatedJobPosting = await jobPostingModel.updateJobPosting(jobId, updatePayload);
+
+    if (!updatedJobPosting) {
+      if (prefersJsonResponse(req)) {
+        return res.status(404).json({ message: "İş ilanı bulunamadı" });
+      }
+      const view = getJobPostingView();
+      if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(404).send(html);
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Bulunamadı</title></head><body><h1>İş ilanı bulunamadı</h1></body></html>`);
+    }
+
+    if (prefersJsonResponse(req)) {
       return res.status(200).json(updatedJobPosting);
     }
 
@@ -230,36 +244,39 @@ const updateJobPosting = async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Güncellendi</title></head><body><h1>İş İlanı Başarıyla Güncellendi</h1><p>ID: ${updatedJobPosting.id}</p><p>Başlık: ${updatedJobPosting.title}</p></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Güncellendi</title></head><body><h1>İş İlanı Başarıyla Güncellendi</h1><p>ID: ${escapeHtml(updatedJobPosting.id)}</p><p>Başlık: ${escapeHtml(updatedJobPosting.title)}</p></body></html>`);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return sendBadRequestResponse(req, res, error.message, '/job-postings');
+    }
     if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Belirtilen kullanıcı (user_id) sistemde kayıtlı değil.</h1><a href="/job-postings">Geri Dön</a></body></html>');
     }
     if (error && error.code === 'TITLE_TOO_LONG') {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: error.message });
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: ${error.message}</h1><a href="/job-postings">Geri Dön</a></body></html>`);
+      return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: ${escapeHtml(error.message)}</h1><a href="/job-postings">Geri Dön</a></body></html>`);
     }
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
- * PATCH /job-postings/:id (Kısmi Güncelleme - HTML / View Layer)
- * Belirtilen ID'deki iş ilanının sadece gönderilen alanlarını kısmi olarak günceller.
+ * PATCH /job-postings/:id (Kısmi Güncelleme - Owner or Admin Only)
  */
 const patchJobPosting = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const jobId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (jobId === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Geçersiz veya eksik iş ilanı ID'si" });
       }
       const view = getJobPostingView();
@@ -272,29 +289,9 @@ const patchJobPosting = async (req, res) => {
       return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Geçersiz ID</title></head><body><h1>Geçersiz veya eksik iş ilanı ID'si</h1></body></html>`);
     }
 
-    const body = req && req.body;
-    if (body && body.title !== undefined) {
-      const title = String(body.title).trim();
-      if (!title) {
-        if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-          return res.status(400).json({ message: "Başlık (title) boş olamaz." });
-        }
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Başlık boş olamaz.</h1><a href="/job-postings">Geri Dön</a></body></html>');
-      }
-      if (title.length > 120) {
-        if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
-          return res.status(400).json({ message: "İş ilanı başlığı en fazla 120 karakter olabilir." });
-        }
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: İş ilanı başlığı en fazla 120 karakter olabilir.</h1><a href="/job-postings">Geri Dön</a></body></html>');
-      }
-    }
-
-    const updatedJobPosting = await jobPostingModel.patchJobPosting(id, req && req.body);
-
-    if (!updatedJobPosting) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const existingJobPosting = await jobPostingModel.getJobPostingById(jobId);
+    if (!existingJobPosting) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "İş ilanı bulunamadı" });
       }
       const view = getJobPostingView();
@@ -307,7 +304,33 @@ const patchJobPosting = async (req, res) => {
       return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Bulunamadı</title></head><body><h1>İş ilanı bulunamadı</h1></body></html>`);
     }
 
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (!canManageJobPosting(req && req.user, existingJobPosting)) {
+      return sendForbiddenResponse(req, res, 'Only the job posting owner or an administrator can edit this job posting.', `/job-postings/${jobId}`);
+    }
+
+    const patchPayload = buildAndValidateJobPostingPayload(req, {
+      isPartial: true,
+      existingJobPosting,
+      isAdmin: isAdminUser(req && req.user)
+    });
+
+    const updatedJobPosting = await jobPostingModel.patchJobPosting(jobId, patchPayload);
+
+    if (!updatedJobPosting) {
+      if (prefersJsonResponse(req)) {
+        return res.status(404).json({ message: "İş ilanı bulunamadı" });
+      }
+      const view = getJobPostingView();
+      if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(404).send(html);
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Bulunamadı</title></head><body><h1>İş ilanı bulunamadı</h1></body></html>`);
+    }
+
+    if (prefersJsonResponse(req)) {
       return res.status(200).json(updatedJobPosting);
     }
 
@@ -319,36 +342,39 @@ const patchJobPosting = async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Güncellendi</title></head><body><h1>İş İlanı Kısmi Olarak Güncellendi</h1><p>ID: ${updatedJobPosting.id}</p><p>Başlık: ${updatedJobPosting.title}</p></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Güncellendi</title></head><body><h1>İş İlanı Kısmi Olarak Güncellendi</h1><p>ID: ${escapeHtml(updatedJobPosting.id)}</p><p>Başlık: ${escapeHtml(updatedJobPosting.title)}</p></body></html>`);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return sendBadRequestResponse(req, res, error.message, '/job-postings');
+    }
     if (error && (error.code === 'ER_NO_REFERENCED_ROW_2' || error.errno === 1452)) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Belirtilen kullanıcı (user_id) bulunamadı." });
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(400).send('<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: Belirtilen kullanıcı (user_id) sistemde kayıtlı değil.</h1><a href="/job-postings">Geri Dön</a></body></html>');
     }
     if (error && error.code === 'TITLE_TOO_LONG') {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: error.message });
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: ${error.message}</h1><a href="/job-postings">Geri Dön</a></body></html>`);
+      return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Hata</title></head><body><h1>Hata: ${escapeHtml(error.message)}</h1><a href="/job-postings">Geri Dön</a></body></html>`);
     }
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
- * DELETE /job-postings/:id (Silme - HTML / View Layer)
- * Belirtilen ID'deki iş ilanını siler.
+ * DELETE /job-postings/:id (Silme - Owner or Admin Only)
  */
 const deleteJobPosting = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const jobId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (jobId === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Geçersiz veya eksik iş ilanı ID'si" });
       }
       const view = getJobPostingView();
@@ -361,10 +387,9 @@ const deleteJobPosting = async (req, res) => {
       return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Geçersiz ID</title></head><body><h1>Geçersiz veya eksik iş ilanı ID'si</h1></body></html>`);
     }
 
-    const isDeleted = await jobPostingModel.deleteJobPosting(id);
-
-    if (!isDeleted) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const existingJobPosting = await jobPostingModel.getJobPostingById(jobId);
+    if (!existingJobPosting) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "İş ilanı bulunamadı" });
       }
       const view = getJobPostingView();
@@ -377,7 +402,27 @@ const deleteJobPosting = async (req, res) => {
       return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Bulunamadı</title></head><body><h1>İş ilanı bulunamadı</h1></body></html>`);
     }
 
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (!canManageJobPosting(req && req.user, existingJobPosting)) {
+      return sendForbiddenResponse(req, res, 'Only the job posting owner or an administrator can delete this job posting.', `/job-postings/${jobId}`);
+    }
+
+    const isDeleted = await jobPostingModel.deleteJobPosting(jobId);
+
+    if (!isDeleted) {
+      if (prefersJsonResponse(req)) {
+        return res.status(404).json({ message: "İş ilanı bulunamadı" });
+      }
+      const view = getJobPostingView();
+      if (view && typeof view.renderJobPostingNotFoundPage === 'function') {
+        const html = view.renderJobPostingNotFoundPage(id, req && req.user ? req.user : null);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(404).send(html);
+      }
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Bulunamadı</title></head><body><h1>İş ilanı bulunamadı</h1></body></html>`);
+    }
+
+    if (prefersJsonResponse(req)) {
       return res.status(204).send();
     }
 
@@ -389,16 +434,16 @@ const deleteJobPosting = async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Silindi</title></head><body><h1>İş İlanı Başarıyla Silindi</h1><p>ID: ${id}</p></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>İş İlanı Silindi</title></head><body><h1>İş İlanı Başarıyla Silindi</h1><p>ID: ${escapeHtml(id)}</p></body></html>`);
   } catch (error) {
     if (error && error.code === 'JOB_HAS_APPLICATIONS') {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(409).json({ success: false, message: error.message });
       }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(409).send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>409 Conflict</title></head><body><h1>409 Conflict</h1><p>${error.message}</p><a href="/job-postings">Back to Job Postings</a></body></html>`);
+      return res.status(409).send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>409 Conflict</title></head><body><h1>409 Conflict</h1><p>${escapeHtml(error.message)}</p><a href="/job-postings">Back to Job Postings</a></body></html>`);
     }
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 

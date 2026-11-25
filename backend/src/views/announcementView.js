@@ -971,11 +971,15 @@ ${NAV_AUTH_CSS}
  * @param {Array} announcements - Duyuru listesi
  * @returns {string} HTML içeriği
  */
-const renderAnnouncementsPage = (announcements = [], currentUser = null) => {
-  const announcementRows = announcements.length > 0
-    ? announcements.map(announcement => `
+const renderAnnouncementsPage = (announcements = [], currentUser = null, options = {}) => {
+  const isAdmin = Boolean((options && options.isAdminView) || (currentUser && currentUser.auth_role === 'admin'));
+  const csrfToken = (options && options.csrfToken) || '';
+  const list = Array.isArray(announcements) ? announcements : [];
+
+  const announcementRows = list.length > 0
+    ? list.map(announcement => `
       <tr>
-        <td><span class="id-pill">#${announcement.id}</span></td>
+        <td><span class="id-pill">#${escapeHtml(announcement.id)}</span></td>
         <td>
           <div style="font-weight: 600; color: var(--soft-white);">${escapeHtml(announcement.title)}</div>
         </td>
@@ -986,9 +990,9 @@ const renderAnnouncementsPage = (announcements = [], currentUser = null) => {
           <small style="color: #8392a8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${escapeHtml(announcement.createdAt || announcement.createdDate || '-')}</small>
         </td>
         <td style="white-space: nowrap; text-align: right;">
-          <a href="/announcements/${announcement.id}" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">Details</a>
-          <button type="button" class="btn btn-warning btn-sm" style="margin-right: 4px;" onclick="startEdit(this)" data-id="${announcement.id}" data-title="${escapeHtml(announcement.title)}" data-content="${escapeHtml(announcement.content)}">Edit</button>
-          <button type="button" class="btn btn-danger btn-sm" onclick="deleteAnnouncement(${announcement.id})">Delete</button>
+          <a href="/announcements/${escapeHtml(announcement.id)}" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">Details</a>
+          ${isAdmin ? `<button type="button" class="btn btn-warning btn-sm" style="margin-right: 4px;" onclick="startEdit(this)" data-id="${escapeHtml(announcement.id)}" data-title="${escapeHtml(announcement.title)}" data-content="${escapeHtml(announcement.content)}">Edit</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="deleteAnnouncement(${escapeHtml(announcement.id)})">Delete</button>` : ''}
         </td>
       </tr>
     `).join('')
@@ -997,41 +1001,22 @@ const renderAnnouncementsPage = (announcements = [], currentUser = null) => {
         <td colspan="5" style="text-align: center; color: var(--secondary-text); padding: 48px 24px;">
           <div style="font-size: 32px; margin-bottom: 12px;">📢</div>
           <div style="font-size: 16px; font-weight: 600; color: var(--soft-white); margin-bottom: 4px;">Henüz kayıtlı duyuru bulunmamaktadır.</div>
-          <div>Yukarıdaki formu kullanarak ilk kurumsal duyuruyu sisteme ekleyebilirsiniz.</div>
+          <div>${isAdmin ? 'Yukarıdaki formu kullanarak ilk kurumsal duyuruyu sisteme ekleyebilirsiniz.' : 'Yönetici tarafından yayınlanan duyurular burada görüntülenecektir.'}</div>
         </td>
       </tr>
     `;
 
-  const content = `
-    <!-- Page Header Banner -->
-    <div class="page-header">
-      <div class="page-eyebrow">📢 INSTITUTIONAL BULLETINS &amp; NEWS</div>
-      <h1 class="page-headline">Announcement Management <span class="badge badge-navy">Announcement View Layer</span></h1>
-      <p class="page-subtitle">Publish departmental updates, campus events, and career bulletins across the Alumni Tracking System.</p>
-    </div>
-
-    <!-- Quick Stats Cards (2-Card Refined Layout) -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-value">${announcements.length}</div>
-        <div class="stat-label">Published Bulletins</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">CRUD</div>
-        <div class="stat-label">Available Operations</div>
-        <div class="stat-sublabel">Create &middot; Read &middot; Update &middot; Delete</div>
-      </div>
-    </div>
-
-    <!-- Create / Edit Form Card (DOM IDs Strictly Preserved) -->
+  const adminFormHtml = isAdmin ? `
+    <!-- Create / Edit Form Card (Admin Only, CSRF Protected) -->
     <div class="card" id="announcementFormCard" style="margin-bottom: 28px;">
       <h2 id="formTitle" class="card-title" style="margin-top: 0;">➕ Create New Announcement</h2>
       <p class="card-description">Draft an official bulletin or update existing announcements across the portal network.</p>
       <form id="announcementForm" action="/announcements" method="POST">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">
         <input type="hidden" id="announcementId" value="">
         <div class="form-group">
           <label for="title">Title (Başlık):</label>
-          <input type="text" id="title" name="title" required placeholder="Enter announcement title (e.g. 2026 Mezuniyet Buluşması)">
+          <input type="text" id="title" name="title" required maxlength="255" placeholder="Enter announcement title (e.g. 2026 Mezuniyet Buluşması)">
         </div>
         <div class="form-group">
           <label for="content">Content (İçerik):</label>
@@ -1040,31 +1025,20 @@ const renderAnnouncementsPage = (announcements = [], currentUser = null) => {
         <div style="display: flex; gap: 8px; align-items: center; margin-top: 20px;">
           <button type="submit" id="submitBtn" class="btn btn-lime">Add Announcement</button>
           <button type="button" id="cancelBtn" class="btn btn-secondary btn-secondary-dark" style="display: none;" onclick="resetForm()">Cancel</button>
+          <a href="/admin/announcements" class="btn btn-secondary btn-secondary-dark" style="margin-left: auto;">🛡️ Admin Announcements Console</a>
         </div>
       </form>
-    </div>
+    </div>` : `
+    <div class="card" style="margin-bottom: 28px; border-color: rgba(109, 140, 255, 0.3);">
+      <h2 class="card-title" style="margin-top: 0;">📢 Official Portal Bulletins</h2>
+      <p class="card-description" style="margin-bottom: 0;">Read official alumni updates, event schedules, and campus news. Only administrators can publish or modify bulletins.</p>
+    </div>`;
 
-    <!-- Announcement List Section -->
-    <h2 class="table-section-title">📋 Announcement List (${announcements.length})</h2>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 80px;">ID</th>
-            <th>Title</th>
-            <th>Content</th>
-            <th style="width: 170px;">Created Date</th>
-            <th style="width: 230px; text-align: right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${announcementRows}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Preserved Client-side Scripts for Form Manipulation & AJAX -->
+  const adminScriptsHtml = isAdmin ? `
+    <!-- Admin Client-side Scripts for Form Manipulation & AJAX (CSRF Protected) -->
     <script>
+      var announcementCsrfToken = ${JSON.stringify(String(csrfToken || '')).replace(/</g, '\\u003c')};
+
       function startEdit(button) {
         var id = button.getAttribute('data-id');
         var title = button.getAttribute('data-title');
@@ -1095,7 +1069,10 @@ const renderAnnouncementsPage = (announcements = [], currentUser = null) => {
       function deleteAnnouncement(id) {
         if (confirm('Are you sure you want to delete announcement #' + id + '?')) {
           fetch('/announcements/' + id, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+              'X-CSRF-Token': announcementCsrfToken
+            }
           })
           .then(function(res) {
             if (res.ok) {
@@ -1124,9 +1101,10 @@ const renderAnnouncementsPage = (announcements = [], currentUser = null) => {
             fetch('/announcements/' + announcementId, {
               method: 'PUT',
               headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': announcementCsrfToken
               },
-              body: JSON.stringify({ title: title, content: content })
+              body: JSON.stringify({ title: title, content: content, _csrf: announcementCsrfToken })
             })
             .then(function(res) {
               if (res.ok) {
@@ -1141,10 +1119,54 @@ const renderAnnouncementsPage = (announcements = [], currentUser = null) => {
           }
         });
       });
-    </script>
+    </script>` : '';
+
+  const content = `
+    <!-- Page Header Banner -->
+    <div class="page-header">
+      <div class="page-eyebrow">📢 INSTITUTIONAL BULLETINS &amp; NEWS</div>
+      <h1 class="page-headline">${isAdmin ? 'Announcement Management' : 'Announcements'} <span class="badge badge-navy">${isAdmin ? 'Admin Controls' : 'Public Read-Only'}</span></h1>
+      <p class="page-subtitle">Publish and view departmental updates, campus events, and career bulletins across the Alumni Tracking System.</p>
+    </div>
+
+    <!-- Quick Stats Cards (2-Card Refined Layout) -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">${list.length}</div>
+        <div class="stat-label">Published Bulletins</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${isAdmin ? 'CRUD' : 'Public'}</div>
+        <div class="stat-label">${isAdmin ? 'Available Operations' : 'Access Mode'}</div>
+        <div class="stat-sublabel">${isAdmin ? 'Create &middot; Read &middot; Update &middot; Delete' : 'View Official Announcements'}</div>
+      </div>
+    </div>
+
+    ${adminFormHtml}
+
+    <!-- Announcement List Section -->
+    <h2 class="table-section-title">📋 Announcement List (${list.length})</h2>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 80px;">ID</th>
+            <th>Title</th>
+            <th>Content</th>
+            <th style="width: 170px;">Created Date</th>
+            <th style="width: 230px; text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${announcementRows}
+        </tbody>
+      </table>
+    </div>
+
+    ${adminScriptsHtml}
   `;
 
-  return getLayout("Announcement Management", "Announcement View Layer", content, currentUser);
+  return getLayout(isAdmin ? "Announcement Management" : "Announcements", "Announcement View Layer", content, currentUser);
 };
 
 /**
@@ -1205,27 +1227,29 @@ const renderAnnouncementCreatedPage = (announcement, currentUser = null) => {
  * @param {Object} announcement - Duyuru nesnesi
  * @returns {string} HTML içeriği
  */
-const renderAnnouncementDetailPage = (announcement, currentUser = null) => {
+const renderAnnouncementDetailPage = (announcement, currentUser = null, options = {}) => {
+  const isAdmin = Boolean((options && options.isAdminView) || (currentUser && currentUser.auth_role === 'admin'));
+  const csrfToken = (options && options.csrfToken) || '';
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
       <span>/</span>
       <a href="/announcements">Announcements</a>
       <span>/</span>
-      <span>Announcement #${announcement.id}</span>
+      <span>Announcement #${escapeHtml(announcement.id)}</span>
     </div>
 
     <div class="page-header">
       <div class="page-eyebrow">📢 BULLETIN DETAIL VIEW</div>
       <h1 class="page-headline">Duyuru Detayı <span class="badge badge-navy">Read (R)</span></h1>
-      <p class="page-subtitle">ID: <strong>#${announcement.id}</strong> numaralı duyurunun mevcut sistem kayıtları:</p>
+      <p class="page-subtitle">ID: <strong>#${escapeHtml(announcement.id)}</strong> numaralı duyurunun mevcut sistem kayıtları:</p>
     </div>
 
     <div class="card">
       <div class="info-list">
         <div class="info-item">
           <span class="info-label">Duyuru ID:</span>
-          <span class="id-pill">#${announcement.id}</span>
+          <span class="id-pill">#${escapeHtml(announcement.id)}</span>
         </div>
         <div class="info-item">
           <span class="info-label">Başlık:</span>
@@ -1244,15 +1268,21 @@ const renderAnnouncementDetailPage = (announcement, currentUser = null) => {
 
     <div class="actions-cluster">
       <a href="/announcements" class="btn btn-lime">📋 Duyuru Listesine Dön</a>
-      <button type="button" class="btn btn-danger" onclick="deleteAnnouncement(${announcement.id})">🗑️ Duyuruyu Sil</button>
-      <a href="/api/announcements/${announcement.id}" target="_blank" class="btn btn-secondary btn-secondary-dark">⚡ View JSON API ↗</a>
+      ${isAdmin ? `<button type="button" class="btn btn-danger" onclick="deleteAnnouncement(${escapeHtml(announcement.id)})">🗑️ Duyuruyu Sil</button>` : ''}
+      <a href="/api/announcements/${escapeHtml(announcement.id)}" target="_blank" class="btn btn-secondary btn-secondary-dark">⚡ View JSON API ↗</a>
     </div>
 
+    ${isAdmin ? `
     <script>
+      var announcementDetailCsrfToken = ${JSON.stringify(String(csrfToken || '')).replace(/</g, '\\u003c')};
+
       function deleteAnnouncement(id) {
         if (confirm('Bu duyuruyu silmek istediğinize emin misiniz? (#' + id + ')')) {
           fetch('/announcements/' + id, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+              'X-CSRF-Token': announcementDetailCsrfToken
+            }
           })
           .then(function(res) {
             if (res.ok) {
@@ -1266,7 +1296,7 @@ const renderAnnouncementDetailPage = (announcement, currentUser = null) => {
           });
         }
       }
-    </script>
+    </script>` : ''}
   `;
 
   return getLayout(`Duyuru Detayı #${announcement.id}`, "Announcement View Layer", content, currentUser);
@@ -1409,7 +1439,8 @@ const renderAnnouncementNotFoundPage = (id, currentUser = null) => {
  * @param {Object} announcement - Düzenlenecek duyuru nesnesi
  * @returns {string} HTML içeriği
  */
-const renderEditAnnouncementPage = (announcement, currentUser = null) => {
+const renderEditAnnouncementPage = (announcement, currentUser = null, options = {}) => {
+  const csrfToken = (options && options.csrfToken) || '';
   const content = `
     <div class="breadcrumb-nav">
       <a href="/">Home</a>
@@ -1443,15 +1474,20 @@ const renderEditAnnouncementPage = (announcement, currentUser = null) => {
     </div>
 
     <script>
+      var editAnnouncementCsrfToken = ${JSON.stringify(String(csrfToken || '')).replace(/</g, '\\u003c')};
+
       document.getElementById('editAnnouncementForm').addEventListener('submit', function(e) {
         e.preventDefault();
         var title = document.getElementById('editTitle').value.trim();
         var content = document.getElementById('editContent').value.trim();
 
-        fetch('/announcements/${announcement.id}', {
+        fetch('/announcements/${escapeHtml(announcement.id)}', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: title, content: content })
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': editAnnouncementCsrfToken
+          },
+          body: JSON.stringify({ title: title, content: content, _csrf: editAnnouncementCsrfToken })
         })
         .then(function(res) {
           if (res.ok) {

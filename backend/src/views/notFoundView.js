@@ -89,7 +89,7 @@ const renderNotFoundPage = (reqOrUrl) => {
     .nav-links .nav-link:hover {
       text-decoration: underline;
     }
-    .nav-user-pill {
+    .nav-links .nav-user-pill {
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -100,6 +100,11 @@ const renderNotFoundPage = (reqOrUrl) => {
       color: #2b6cb0;
       font-size: 13px;
       font-weight: 600;
+      text-decoration: none;
+    }
+    .nav-links .nav-user-pill:hover {
+      background: #dbeafe;
+      border-color: #93c5fd;
     }
     .nav-role-badge {
       display: inline-flex;

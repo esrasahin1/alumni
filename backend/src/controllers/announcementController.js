@@ -1,4 +1,13 @@
 const announcementModel = require('../models/announcementModel');
+const { getAnnouncementCsrfToken } = require('../middlewares/mvcCsrfFactory');
+const {
+  escapeHtml,
+  parsePositiveIntegerId,
+  isAdminUser,
+  prefersJsonResponse,
+  sendForbiddenResponse,
+  sendBadRequestResponse
+} = require('./accessHelpers');
 
 /**
  * Announcement View modülünü dinamik ve güvenli bir şekilde yükler.
@@ -12,48 +21,85 @@ const getAnnouncementView = () => {
   }
 };
 
+function buildAnnouncementPayload(body, isPartial) {
+  const input = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+  const payload = {};
+
+  if (!isPartial || input.title !== undefined) {
+    if (typeof input.title !== 'string') {
+      const err = new Error('Title must be a valid string.');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    const title = input.title.trim();
+    if (!title || title.length > 255) {
+      const err = new Error('Title is required and must not exceed 255 characters.');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    payload.title = title;
+  }
+
+  if (!isPartial || input.content !== undefined) {
+    if (typeof input.content !== 'string') {
+      const err = new Error('Content must be a valid string.');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    const content = input.content.trim();
+    if (!content) {
+      const err = new Error('Content is required.');
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    payload.content = content;
+  }
+
+  return payload;
+}
+
 /**
  * Controller: Announcement işlemlerini ve iş mantığını yönetir (HTML / View Layer, MySQL)
  */
 
 /**
  * GET /announcements (Duyuru Listesi - HTML / View Layer)
- * Model'den duyuruları alır ve View Layer ile HTML olarak render eder.
+ * Public read access; admin management UI shown only for auth_role === 'admin'.
  */
 const getAnnouncements = async (req, res) => {
   try {
     const announcements = await announcementModel.getAllAnnouncements();
 
-    // İstemci açıkça sadece JSON talep ederse (API istemcileri için esneklik)
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(200).json(announcements);
     }
 
-    // View katmanı mevcutsa şablonu render et
     const view = getAnnouncementView();
     if (view && typeof view.renderAnnouncementsPage === 'function') {
-      const html = view.renderAnnouncementsPage(announcements, req && req.user ? req.user : null);
+      const html = view.renderAnnouncementsPage(announcements, req && req.user ? req.user : null, {
+        csrfToken: getAnnouncementCsrfToken(req, res)
+      });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyurular - Alumni Tracking System</title></head><body><h1>Duyurular</h1><pre>${JSON.stringify(announcements, null, 2)}</pre></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyurular - Alumni Tracking System</title></head><body><h1>Duyurular</h1><pre>${escapeHtml(JSON.stringify(announcements, null, 2))}</pre></body></html>`);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
  * GET /announcements/:id (Duyuru Detayı - HTML / View Layer)
- * ID'ye göre tek bir duyuruyu getirir (Bulunamazsa 404, geçersiz ID ise 400 döner).
  */
 const getAnnouncement = async (req, res) => {
   try {
     const id = req && req.params && req.params.id;
+    const announcementId = parsePositiveIntegerId(id);
 
-    if (!id || isNaN(Number(id))) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (announcementId === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
       }
       const view = getAnnouncementView();
@@ -66,10 +112,10 @@ const getAnnouncement = async (req, res) => {
       return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Geçersiz ID</title></head><body><h1>Geçersiz veya eksik duyuru ID'si</h1></body></html>`);
     }
 
-    const announcement = await announcementModel.getAnnouncementById(id);
+    const announcement = await announcementModel.getAnnouncementById(announcementId);
 
     if (!announcement) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Duyuru bulunamadı" });
       }
       const view = getAnnouncementView();
@@ -82,33 +128,39 @@ const getAnnouncement = async (req, res) => {
       return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Bulunamadı</title></head><body><h1>Duyuru bulunamadı</h1></body></html>`);
     }
 
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(200).json(announcement);
     }
 
     const view = getAnnouncementView();
     if (view && typeof view.renderAnnouncementDetailPage === 'function') {
-      const html = view.renderAnnouncementDetailPage(announcement, req && req.user ? req.user : null);
+      const html = view.renderAnnouncementDetailPage(announcement, req && req.user ? req.user : null, {
+        csrfToken: getAnnouncementCsrfToken(req, res)
+      });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(html);
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>${announcement.title || 'Duyuru Detayı'}</title></head><body><h1>${announcement.title}</h1><p>${announcement.content}</p></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>${escapeHtml(announcement.title || 'Duyuru Detayı')}</title></head><body><h1>${escapeHtml(announcement.title)}</h1><p>${escapeHtml(announcement.content)}</p></body></html>`);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
- * POST /announcements (Yeni Duyuru Oluşturma - HTML / View Layer)
- * Model üzerinden yeni duyuru oluşturur ve View Layer ile HTML sonucu gösterir.
+ * POST /announcements (Yeni Duyuru Oluşturma - Admin Only)
  */
 const createAnnouncement = async (req, res) => {
   try {
-    const newAnnouncement = await announcementModel.createAnnouncement(req && req.body);
+    if (!isAdminUser(req && req.user)) {
+      return sendForbiddenResponse(req, res, 'Only administrators can create announcements.', '/announcements');
+    }
 
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const payload = buildAnnouncementPayload(req && req.body, false);
+    const newAnnouncement = await announcementModel.createAnnouncement(payload);
+
+    if (prefersJsonResponse(req)) {
       return res.status(201).json(newAnnouncement);
     }
 
@@ -120,22 +172,29 @@ const createAnnouncement = async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(201).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Oluşturuldu</title></head><body><h1>Duyuru Başarıyla Oluşturuldu</h1><p>ID: ${newAnnouncement.id}</p><p>Başlık: ${newAnnouncement.title}</p></body></html>`);
+    return res.status(201).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Oluşturuldu</title></head><body><h1>Duyuru Başarıyla Oluşturuldu</h1><p>ID: ${escapeHtml(newAnnouncement.id)}</p><p>Başlık: ${escapeHtml(newAnnouncement.title)}</p></body></html>`);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return sendBadRequestResponse(req, res, error.message, '/announcements');
+    }
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
- * PUT /announcements/:id (Tam Güncelleme - HTML / View Layer)
- * Belirtilen ID'deki duyurunun tüm bilgilerini günceller (ID korunur).
+ * PUT /announcements/:id (Tam Güncelleme - Admin Only)
  */
 const updateAnnouncement = async (req, res) => {
   try {
-    const id = req && req.params && req.params.id;
+    if (!isAdminUser(req && req.user)) {
+      return sendForbiddenResponse(req, res, 'Only administrators can edit announcements.', '/announcements');
+    }
 
-    if (!id || isNaN(Number(id))) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const id = req && req.params && req.params.id;
+    const announcementId = parsePositiveIntegerId(id);
+
+    if (announcementId === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
       }
       const view = getAnnouncementView();
@@ -148,10 +207,11 @@ const updateAnnouncement = async (req, res) => {
       return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Geçersiz ID</title></head><body><h1>Geçersiz veya eksik duyuru ID'si</h1></body></html>`);
     }
 
-    const updatedAnnouncement = await announcementModel.updateAnnouncement(id, req && req.body);
+    const payload = buildAnnouncementPayload(req && req.body, false);
+    const updatedAnnouncement = await announcementModel.updateAnnouncement(announcementId, payload);
 
     if (!updatedAnnouncement) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Duyuru bulunamadı" });
       }
       const view = getAnnouncementView();
@@ -164,7 +224,7 @@ const updateAnnouncement = async (req, res) => {
       return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Bulunamadı</title></head><body><h1>Duyuru bulunamadı</h1></body></html>`);
     }
 
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(200).json(updatedAnnouncement);
     }
 
@@ -176,22 +236,29 @@ const updateAnnouncement = async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Güncellendi</title></head><body><h1>Duyuru Başarıyla Güncellendi</h1><p>ID: ${updatedAnnouncement.id}</p><p>Başlık: ${updatedAnnouncement.title}</p></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Güncellendi</title></head><body><h1>Duyuru Başarıyla Güncellendi</h1><p>ID: ${escapeHtml(updatedAnnouncement.id)}</p><p>Başlık: ${escapeHtml(updatedAnnouncement.title)}</p></body></html>`);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return sendBadRequestResponse(req, res, error.message, '/announcements');
+    }
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
- * PATCH /announcements/:id (Kısmi Güncelleme - HTML / View Layer)
- * Belirtilen ID'deki duyurunun sadece gönderilen alanlarını kısmi olarak günceller.
+ * PATCH /announcements/:id (Kısmi Güncelleme - Admin Only)
  */
 const patchAnnouncement = async (req, res) => {
   try {
-    const id = req && req.params && req.params.id;
+    if (!isAdminUser(req && req.user)) {
+      return sendForbiddenResponse(req, res, 'Only administrators can edit announcements.', '/announcements');
+    }
 
-    if (!id || isNaN(Number(id))) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const id = req && req.params && req.params.id;
+    const announcementId = parsePositiveIntegerId(id);
+
+    if (announcementId === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
       }
       const view = getAnnouncementView();
@@ -204,10 +271,11 @@ const patchAnnouncement = async (req, res) => {
       return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Geçersiz ID</title></head><body><h1>Geçersiz veya eksik duyuru ID'si</h1></body></html>`);
     }
 
-    const updatedAnnouncement = await announcementModel.patchAnnouncement(id, req && req.body);
+    const payload = buildAnnouncementPayload(req && req.body, true);
+    const updatedAnnouncement = await announcementModel.patchAnnouncement(announcementId, payload);
 
     if (!updatedAnnouncement) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Duyuru bulunamadı" });
       }
       const view = getAnnouncementView();
@@ -220,7 +288,7 @@ const patchAnnouncement = async (req, res) => {
       return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Bulunamadı</title></head><body><h1>Duyuru bulunamadı</h1></body></html>`);
     }
 
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(200).json(updatedAnnouncement);
     }
 
@@ -232,22 +300,29 @@ const patchAnnouncement = async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Güncellendi</title></head><body><h1>Duyuru Kısmi Olarak Güncellendi</h1><p>ID: ${updatedAnnouncement.id}</p><p>Başlık: ${updatedAnnouncement.title}</p></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Güncellendi</title></head><body><h1>Duyuru Kısmi Olarak Güncellendi</h1><p>ID: ${escapeHtml(updatedAnnouncement.id)}</p><p>Başlık: ${escapeHtml(updatedAnnouncement.title)}</p></body></html>`);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return sendBadRequestResponse(req, res, error.message, '/announcements');
+    }
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 /**
- * DELETE /announcements/:id (Silme - HTML / View Layer)
- * Belirtilen ID'deki duyuruyu siler.
+ * DELETE /announcements/:id (Silme - Admin Only)
  */
 const deleteAnnouncement = async (req, res) => {
   try {
-    const id = req && req.params && req.params.id;
+    if (!isAdminUser(req && req.user)) {
+      return sendForbiddenResponse(req, res, 'Only administrators can delete announcements.', '/announcements');
+    }
 
-    if (!id || isNaN(Number(id))) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    const id = req && req.params && req.params.id;
+    const announcementId = parsePositiveIntegerId(id);
+
+    if (announcementId === null) {
+      if (prefersJsonResponse(req)) {
         return res.status(400).json({ message: "Geçersiz veya eksik duyuru ID'si" });
       }
       const view = getAnnouncementView();
@@ -260,10 +335,10 @@ const deleteAnnouncement = async (req, res) => {
       return res.status(400).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Geçersiz ID</title></head><body><h1>Geçersiz veya eksik duyuru ID'si</h1></body></html>`);
     }
 
-    const isDeleted = await announcementModel.deleteAnnouncement(id);
+    const isDeleted = await announcementModel.deleteAnnouncement(announcementId);
 
     if (!isDeleted) {
-      if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+      if (prefersJsonResponse(req)) {
         return res.status(404).json({ message: "Duyuru bulunamadı" });
       }
       const view = getAnnouncementView();
@@ -276,7 +351,7 @@ const deleteAnnouncement = async (req, res) => {
       return res.status(404).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Bulunamadı</title></head><body><h1>Duyuru bulunamadı</h1></body></html>`);
     }
 
-    if (req && req.headers && req.headers.accept === 'application/json' && !req.headers.accept.includes('text/html')) {
+    if (prefersJsonResponse(req)) {
       return res.status(204).send();
     }
 
@@ -288,13 +363,14 @@ const deleteAnnouncement = async (req, res) => {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Silindi</title></head><body><h1>Duyuru Başarıyla Silindi</h1><p>ID: ${id}</p></body></html>`);
+    return res.status(200).send(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Duyuru Silindi</title></head><body><h1>Duyuru Başarıyla Silindi</h1><p>ID: ${escapeHtml(id)}</p></body></html>`);
   } catch (error) {
-    res.status(500).send('Internal Server Error: ' + error.message);
+    res.status(500).send('Internal Server Error: ' + escapeHtml(error.message));
   }
 };
 
 module.exports = {
+  buildAnnouncementPayload,
   getAnnouncements,
   getAllAnnouncements: getAnnouncements,
   getAnnouncement,

@@ -1001,9 +1001,18 @@ ${NAV_AUTH_CSS}
  * @param {Array} jobPostings - List of job postings
  * @returns {string} HTML content
  */
-const renderJobPostingsPage = (jobPostings = [], currentUser = null) => {
+const renderJobPostingsPage = (jobPostings = [], currentUser = null, options = {}) => {
+  const csrfToken = (options && options.csrfToken) || '';
+  const isAdmin = Boolean(currentUser && currentUser.auth_role === 'admin');
+  const canManageJob = (job) => Boolean(
+    currentUser &&
+    (isAdmin || (job && job.user_id !== null && job.user_id !== undefined && Number(currentUser.id) === Number(job.user_id)))
+  );
+
   const tableRows = jobPostings && jobPostings.length > 0
-    ? jobPostings.map(job => `
+    ? jobPostings.map(job => {
+      const manageAllowed = canManageJob(job);
+      return `
       <tr>
         <td><span class="id-pill">#${escapeHtml(job.id)}</span></td>
         <td>
@@ -1012,55 +1021,36 @@ const renderJobPostingsPage = (jobPostings = [], currentUser = null) => {
           </a>
         </td>
         <td><span class="badge badge-company">${escapeHtml(job.company)}</span></td>
-        <td>${job.user_id ? `<a href="/users/${escapeHtml(job.user_id)}" style="color: var(--electric-blue); font-weight: 600; text-decoration: none;">#${escapeHtml(job.user_id)}</a>` : '<span style="color: #5d6f8a;">-</span>'}</td>
+        <td>${job.user_id ? (currentUser ? `<a href="/users/${escapeHtml(job.user_id)}" style="color: var(--electric-blue); font-weight: 600; text-decoration: none;">#${escapeHtml(job.user_id)}</a>` : `<span class="id-pill">#${escapeHtml(job.user_id)}</span>`) : '<span style="color: #5d6f8a;">-</span>'}</td>
         <td>${escapeHtml(job.location || job.city || '-')}</td>
         <td>${escapeHtml(job.contact_email || '-')}</td>
         <td><small style="color: #8392a8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">${escapeHtml(job.createdDate || job.createdAt || job.created_at || '-')}</small></td>
         <td style="white-space: nowrap; text-align: right;">
           <a href="/job-postings/${escapeHtml(job.id)}" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">View Details</a>
-          <a href="/job-postings/${escapeHtml(job.id)}/applications" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">Applications</a>
+          ${manageAllowed ? `<a href="/job-postings/${escapeHtml(job.id)}/applications" class="btn btn-secondary btn-secondary-dark btn-sm" style="margin-right: 4px;">Applications</a>
           <button type="button" onclick="editJob(${escapeHtml(JSON.stringify(job))})" class="btn btn-warning btn-sm" style="margin-right: 4px;">Edit</button>
-          <button type="button" onclick="deleteJob(${escapeHtml(job.id)})" class="btn btn-danger btn-sm">Delete</button>
+          <button type="button" onclick="deleteJob(${escapeHtml(job.id)})" class="btn btn-danger btn-sm">Delete</button>` : ''}
         </td>
       </tr>
-    `).join('')
+    `;
+    }).join('')
     : `
       <tr>
         <td colspan="8" style="text-align: center; color: var(--secondary-text); padding: 48px 24px;">
           <div style="font-size: 32px; margin-bottom: 12px;">💼</div>
           <div style="font-size: 16px; font-weight: 600; color: var(--soft-white); margin-bottom: 4px;">No job postings found.</div>
-          <div>You can publish the first career opportunity using the form above.</div>
+          <div>${currentUser ? 'You can publish the first career opportunity using the form above.' : 'Check back later for new alumni and partner opportunities.'}</div>
         </td>
       </tr>
     `;
 
-  const content = `
-    <!-- Page Header Banner -->
-    <div class="page-header">
-      <div class="page-eyebrow">💼 CAREER &amp; TALENT OPPORTUNITIES</div>
-      <h1 class="page-headline">Career &amp; Job Opportunities <span class="badge badge-navy">Job View Layer</span></h1>
-      <p class="page-subtitle">Explore, manage career opportunities, and track applications for our alumni and corporate partners.</p>
-    </div>
-
-    <!-- Quick Stats Cards (2-Card Refined Layout) -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-value">${jobPostings.length}</div>
-        <div class="stat-label">Active Listings</div>
-        <div class="stat-sublabel">Currently published positions across the portal</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">CRUD</div>
-        <div class="stat-label">Available Operations</div>
-        <div class="stat-sublabel">Create &middot; Read &middot; Update &middot; Delete &middot; Applications</div>
-      </div>
-    </div>
-
-    <!-- Create / Edit Form Card (DOM IDs Strictly Preserved) -->
+  const jobFormSectionHtml = currentUser ? `
+    <!-- Create / Edit Form Card (Authenticated Users Only; Owners/Admin Can Edit) -->
     <div class="card" id="jobPostingFormCard" style="margin-bottom: 32px;">
       <h2 id="formTitle" class="card-title" style="margin-top: 0;">➕ Create New Job Posting</h2>
-      <p class="card-description">Publish a new job opportunity or update an existing position's details.</p>
+      <p class="card-description">Publish a new job opportunity${isAdmin ? ' or update an existing position.' : ' under your account or edit one of your own listings.'}</p>
       <form id="jobForm" method="POST" action="/job-postings">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}" />
         <input type="hidden" id="editJobId" name="_id" value="" />
         
         <div class="form-grid">
@@ -1075,11 +1065,12 @@ const renderJobPostingsPage = (jobPostings = [], currentUser = null) => {
             <input type="text" id="company" name="company" required placeholder="e.g. Alumni Tech Corp" />
           </div>
 
+          ${isAdmin ? `
           <div class="form-group">
-            <label for="user_id">Posted By (User ID - Optional)</label>
+            <label for="user_id">Posted By (User ID - Admin Only)</label>
             <input type="number" id="user_id" name="user_id" placeholder="e.g. 1 (Registered user ID)" min="1" />
-            <span class="char-hint">Account ID of the posting alumnus / recruiter</span>
-          </div>
+            <span class="char-hint">Optional publisher user ID override (defaults to current user)</span>
+          </div>` : `<input type="hidden" id="user_id" value="${escapeHtml(currentUser.id)}" />`}
 
           <div class="form-group">
             <label for="location">Location (Optional)</label>
@@ -1102,7 +1093,141 @@ const renderJobPostingsPage = (jobPostings = [], currentUser = null) => {
           <button type="button" id="cancelBtn" class="btn btn-secondary btn-secondary-dark" style="display:none;" onclick="resetForm()">Cancel</button>
         </div>
       </form>
+    </div>` : `
+    <div class="card" style="margin-bottom: 32px; border-color: rgba(109, 140, 255, 0.3);">
+      <h2 class="card-title" style="margin-top: 0;">💼 Explore Alumni Career Opportunities</h2>
+      <p class="card-description" style="margin-bottom: 14px;">Browse open roles and click any listing to apply. Sign in to publish or manage your own job postings.</p>
+      <a href="/login" class="btn btn-lime btn-sm">Sign In to Post a Job</a>
+    </div>`;
+
+  const jobScriptsHtml = currentUser ? `
+    <!-- Client-side CRUD and AJAX PUT/DELETE Script (CSRF Protected) -->
+    <script>
+      var jobCsrfToken = ${JSON.stringify(String(csrfToken || '')).replace(/</g, '\\u003c')};
+
+      function editJob(job) {
+        document.getElementById('editJobId').value = job.id;
+        var uidInput = document.getElementById('user_id');
+        if (uidInput && uidInput.type !== 'hidden') {
+          uidInput.value = (job.user_id !== null && job.user_id !== undefined) ? job.user_id : '';
+        }
+        document.getElementById('title').value = job.title || '';
+        document.getElementById('company').value = job.company || '';
+        document.getElementById('location').value = job.location || job.city || '';
+        document.getElementById('contact_email').value = job.contact_email || '';
+        document.getElementById('description').value = job.description || '';
+        document.getElementById('submitBtn').innerText = 'Save Changes (PUT)';
+        document.getElementById('cancelBtn').style.display = 'inline-flex';
+        var formTitle = document.getElementById('formTitle');
+        if (formTitle) {
+          formTitle.innerText = '✏️ Edit Job Posting (#' + job.id + ')';
+        }
+        var formCard = document.getElementById('jobPostingFormCard') || document.getElementById('jobForm');
+        if (formCard) {
+          formCard.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+
+      function resetForm() {
+        document.getElementById('editJobId').value = '';
+        var uidInput = document.getElementById('user_id');
+        if (uidInput && uidInput.type !== 'hidden') {
+          uidInput.value = '';
+        }
+        document.getElementById('jobForm').reset();
+        document.getElementById('submitBtn').innerText = 'Publish Job Posting';
+        document.getElementById('cancelBtn').style.display = 'none';
+        var formTitle = document.getElementById('formTitle');
+        if (formTitle) {
+          formTitle.innerText = '➕ Create New Job Posting';
+        }
+      }
+
+      document.getElementById('jobForm').addEventListener('submit', function(e) {
+        var editId = document.getElementById('editJobId').value;
+        if (editId) {
+          e.preventDefault();
+          var uidInput = document.getElementById('user_id');
+          var userIdVal = uidInput && uidInput.type !== 'hidden' ? uidInput.value : '';
+          var payload = {
+            title: document.getElementById('title').value,
+            company: document.getElementById('company').value,
+            location: document.getElementById('location').value,
+            contact_email: document.getElementById('contact_email').value,
+            description: document.getElementById('description').value,
+            _csrf: jobCsrfToken
+          };
+          if (uidInput && uidInput.type !== 'hidden') {
+            payload.user_id = userIdVal ? Number(userIdVal) : null;
+          }
+          fetch('/job-postings/' + editId, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-Token': jobCsrfToken
+            },
+            body: JSON.stringify(payload)
+          }).then(function(res) {
+            if (!res.ok) {
+              return res.json().catch(function() { return {}; }).then(function(data) {
+                throw new Error(data.message || ('HTTP ' + res.status));
+              });
+            }
+            window.location.href = '/job-postings/' + editId;
+          }).catch(function(err) {
+            alert('Update error: ' + err.message);
+          });
+        }
+      });
+
+      function deleteJob(id) {
+        if (confirm('Are you sure you want to delete job posting #' + id + '?')) {
+          fetch('/job-postings/' + id, {
+            method: 'DELETE',
+            headers: {
+              'Accept': 'application/json',
+              'X-CSRF-Token': jobCsrfToken
+            }
+          }).then(function(res) {
+            if (!res.ok && res.status !== 204) {
+              return res.json().catch(function() { return {}; }).then(function(data) {
+                throw new Error(data.message || ('HTTP ' + res.status));
+              });
+            }
+            window.location.reload();
+          }).catch(function(err) {
+            alert('Delete error: ' + err.message);
+          });
+        }
+      }
+    </script>` : '';
+
+  const content = `
+    <!-- Page Header Banner -->
+    <div class="page-header">
+      <div class="page-eyebrow">💼 CAREER &amp; TALENT OPPORTUNITIES</div>
+      <h1 class="page-headline">Career &amp; Job Opportunities <span class="badge badge-navy">Job View Layer</span></h1>
+      <p class="page-subtitle">Explore career opportunities, submit applications, and manage postings owned by your account.</p>
     </div>
+
+    <!-- Quick Stats Cards (2-Card Refined Layout) -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">${jobPostings.length}</div>
+        <div class="stat-label">Active Listings</div>
+        <div class="stat-sublabel">Currently published positions across the portal</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${currentUser ? 'Owner / Admin' : 'Public'}</div>
+        <div class="stat-label">Management Scope</div>
+        <div class="stat-sublabel">${currentUser ? 'View &middot; Apply &middot; Manage Own Postings' : 'Public Job Directory &middot; Guest Apply'}</div>
+      </div>
+    </div>
+
+    ${jobFormSectionHtml}
 
     <!-- Active Job Postings Table -->
     <div style="margin-top: 24px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
@@ -1130,80 +1255,7 @@ const renderJobPostingsPage = (jobPostings = [], currentUser = null) => {
       </table>
     </div>
 
-    <!-- Client-side CRUD and AJAX PUT/DELETE Script (Strictly Preserved Functions) -->
-    <script>
-      function editJob(job) {
-        document.getElementById('editJobId').value = job.id;
-        document.getElementById('user_id').value = (job.user_id !== null && job.user_id !== undefined) ? job.user_id : '';
-        document.getElementById('title').value = job.title || '';
-        document.getElementById('company').value = job.company || '';
-        document.getElementById('location').value = job.location || job.city || '';
-        document.getElementById('contact_email').value = job.contact_email || '';
-        document.getElementById('description').value = job.description || '';
-        document.getElementById('submitBtn').innerText = 'Save Changes (PUT)';
-        document.getElementById('cancelBtn').style.display = 'inline-flex';
-        var formTitle = document.getElementById('formTitle');
-        if (formTitle) {
-          formTitle.innerText = '✏️ Edit Job Posting (#' + job.id + ')';
-        }
-        var formCard = document.getElementById('jobPostingFormCard') || document.getElementById('jobForm');
-        if (formCard) {
-          formCard.scrollIntoView({ behavior: 'smooth' });
-        } else {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }
-
-      function resetForm() {
-        document.getElementById('editJobId').value = '';
-        document.getElementById('user_id').value = '';
-        document.getElementById('jobForm').reset();
-        document.getElementById('submitBtn').innerText = 'Publish Job Posting';
-        document.getElementById('cancelBtn').style.display = 'none';
-        var formTitle = document.getElementById('formTitle');
-        if (formTitle) {
-          formTitle.innerText = '➕ Create New Job Posting';
-        }
-      }
-
-      document.getElementById('jobForm').addEventListener('submit', function(e) {
-        var editId = document.getElementById('editJobId').value;
-        if (editId) {
-          e.preventDefault();
-          var userIdVal = document.getElementById('user_id').value;
-          var payload = {
-            user_id: userIdVal ? Number(userIdVal) : null,
-            title: document.getElementById('title').value,
-            company: document.getElementById('company').value,
-            location: document.getElementById('location').value,
-            contact_email: document.getElementById('contact_email').value,
-            description: document.getElementById('description').value
-          };
-          fetch('/job-postings/' + editId, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'text/html' },
-            body: JSON.stringify(payload)
-          }).then(function(res) {
-            window.location.href = '/job-postings/' + editId;
-          }).catch(function(err) {
-            alert('Update error: ' + err.message);
-          });
-        }
-      });
-
-      function deleteJob(id) {
-        if (confirm('Are you sure you want to delete job posting #' + id + '?')) {
-          fetch('/job-postings/' + id, {
-            method: 'DELETE',
-            headers: { 'Accept': 'text/html' }
-          }).then(function(res) {
-            window.location.reload();
-          }).catch(function(err) {
-            alert('Delete error: ' + err.message);
-          });
-        }
-      }
-    </script>
+    ${jobScriptsHtml}
   `;
 
   return getLayout('Career & Job Opportunities', 'Job View Layer', content, currentUser);
@@ -1215,7 +1267,17 @@ const renderJobPostingsPage = (jobPostings = [], currentUser = null) => {
  * @param {Object} job - Single job posting object
  * @returns {string} HTML content
  */
-const renderJobPostingDetailPage = (job, currentUser = null) => {
+const renderJobPostingDetailPage = (job, currentUser = null, options = {}) => {
+  const csrfToken = (options && options.csrfToken) || '';
+  const jobPostingCsrfToken = (options && options.jobPostingCsrfToken) || '';
+  const isAdmin = Boolean(currentUser && currentUser.auth_role === 'admin');
+  const isOwner = Boolean(
+    currentUser &&
+    job.user_id !== null &&
+    job.user_id !== undefined &&
+    Number(currentUser.id) === Number(job.user_id)
+  );
+  const canManageJob = isAdmin || isOwner;
   const content = `
     <!-- Page Header Banner -->
     <div class="page-header">
@@ -1274,36 +1336,79 @@ const renderJobPostingDetailPage = (job, currentUser = null) => {
       <div style="white-space: pre-wrap; line-height: 1.7; color: var(--soft-white); background: rgba(16, 24, 39, 0.5); padding: 18px; border-radius: var(--radius-sm); border: 1px solid var(--subtle-border); font-size: 14px;">${escapeHtml(job.description || 'No description or requirements provided for this position.')}</div>
     </div>
 
-    <!-- Nested Applications Action Box -->
-    <div class="nested-action-card">
-      <h3>📌 Application Process for this Position</h3>
-      <p>Review candidate applications submitted for this role or fill out a new job application form directly.</p>
-      <div style="display: flex; flex-wrap: wrap; gap: 12px;">
-        <a href="/job-postings/${escapeHtml(job.id)}/applications" class="btn btn-secondary btn-secondary-dark">📋 View Applications</a>
-        <a href="/job-postings/${escapeHtml(job.id)}/applications#apply" class="btn btn-lime">✍️ Apply for this Position</a>
+    ${isOwner ? `
+    <!-- Apply Section Hidden for Job Owner -->
+    <div class="nested-action-card" id="apply">
+      <h3>📋 Manage Applications for Your Posting</h3>
+      <p>You published this job posting, so applying to your own listing is disabled. Review submitted candidate applications below.</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px;">
+        <a href="/job-postings/${escapeHtml(job.id)}/applications" class="btn btn-lime">📋 View Applications (Owner)</a>
       </div>
-    </div>
+    </div>` : `
+    <!-- Apply & Candidate Actions Section -->
+    <div class="nested-action-card" id="apply">
+      <h3>✍️ Apply for this Position</h3>
+      <p>Submit your application for <strong>${escapeHtml(job.title)}</strong> at <strong>${escapeHtml(job.company)}</strong>.${currentUser ? ' Your submission will be linked automatically to your account.' : ' Guest applications are supported.'}</p>
+      <form action="/job-postings/${escapeHtml(job.id)}/applications" method="POST" style="margin-top: 16px;">
+        ${currentUser ? `<input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}">` : ''}
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="apply_name">Full Name *</label>
+            <input type="text" id="apply_name" name="applicant_name" required value="${currentUser && currentUser.name ? escapeHtml(currentUser.name) : ''}" placeholder="e.g. Jane Doe" />
+          </div>
+          <div class="form-group">
+            <label for="apply_email">Email Address *</label>
+            <input type="email" id="apply_email" name="applicant_email" required value="${currentUser && currentUser.email ? escapeHtml(currentUser.email) : ''}" placeholder="e.g. jane.doe@alumni.edu" />
+          </div>
+          <div class="form-group full-width">
+            <label for="apply_resume">Resume / Portfolio URL (Optional)</label>
+            <input type="text" id="apply_resume" name="resume_url" placeholder="https://..." />
+          </div>
+          <div class="form-group full-width">
+            <label for="apply_cover">Cover Letter / Notes (Optional)</label>
+            <textarea id="apply_cover" name="cover_letter" rows="3" placeholder="Tell us why you are a great fit..."></textarea>
+          </div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px;">
+          <button type="submit" class="btn btn-lime">✍️ Submit Application</button>
+          ${isAdmin
+            ? `<a href="/job-postings/${escapeHtml(job.id)}/applications" class="btn btn-secondary btn-secondary-dark">📋 View Applications (Admin)</a>`
+            : ''}
+        </div>
+      </form>
+    </div>`}
 
     <!-- Bottom Actions Cluster -->
     <div class="actions-cluster" style="justify-content: space-between; align-items: center; margin-top: 28px;">
       <a href="/job-postings" class="btn btn-secondary btn-secondary-dark">← Back to All Postings</a>
-      <button type="button" onclick="deleteJobDetail(${escapeHtml(job.id)})" class="btn btn-danger">Delete This Posting</button>
+      ${canManageJob ? `<button type="button" onclick="deleteJobDetail(${escapeHtml(job.id)})" class="btn btn-danger">Delete This Posting</button>` : ''}
     </div>
 
+    ${canManageJob ? `
     <script>
+      var jobDetailCsrfToken = ${JSON.stringify(String(jobPostingCsrfToken || '')).replace(/</g, '\\u003c')};
+
       function deleteJobDetail(id) {
         if (confirm('Are you sure you want to delete job posting #' + id + '? This action cannot be undone.')) {
           fetch('/job-postings/' + id, {
             method: 'DELETE',
-            headers: { 'Accept': 'text/html' }
-          }).then(function() {
+            headers: {
+              'Accept': 'application/json',
+              'X-CSRF-Token': jobDetailCsrfToken
+            }
+          }).then(function(res) {
+            if (!res.ok && res.status !== 204) {
+              return res.json().catch(function() { return {}; }).then(function(data) {
+                throw new Error(data.message || ('HTTP ' + res.status));
+              });
+            }
             window.location.href = '/job-postings';
           }).catch(function(err) {
             alert('Delete error: ' + err.message);
           });
         }
       }
-    </script>
+    </script>` : ''}
   `;
 
   return getLayout(`Job Posting #${job.id}`, 'Details', content, currentUser);

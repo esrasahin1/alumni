@@ -147,6 +147,13 @@ const getAdminLayout = (title, activeSection, content, currentUser = null) => {
       font-size: 0.85rem;
       font-weight: 600;
       white-space: nowrap;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .nav-user-pill:hover,
+    .nav-user-pill.active {
+      background: rgba(213, 243, 106, 0.24);
+      border-color: var(--lime);
     }
     .nav-role-badge {
       display: inline-flex;

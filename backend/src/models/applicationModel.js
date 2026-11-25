@@ -68,15 +68,92 @@ const getAllApplicationsWithJobDetails = async () => {
 };
 
 /**
+ * Returns all applications submitted by a specific authenticated user (WHERE a.user_id = ?),
+ * joined with job_postings for job_title and job_company, ordered newest first.
+ * @param {number|string} userId
+ * @returns {Promise<Array>}
+ */
+const getApplicationsByUserId = async (userId) => {
+  if (userId === undefined || userId === null || idIsInvalid(userId)) {
+    return [];
+  }
+  const targetUserId = Number(userId);
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    `SELECT a.id, a.job_posting_id, a.user_id, a.applicant_name, a.applicant_email,
+            a.resume_url, a.cover_letter, a.status, a.created_at, a.updated_at,
+            jp.title AS job_title, jp.company AS job_company
+     FROM applications a
+     LEFT JOIN job_postings jp ON a.job_posting_id = jp.id
+     WHERE a.user_id = ?
+     ORDER BY a.id DESC`,
+    [targetUserId]
+  );
+  return rows.map((row) => ({
+    ...formatApplication(row),
+    job_title: row.job_title || null,
+    job_company: row.job_company || null
+  }));
+};
+
+/**
+ * Returns all applications submitted to job postings owned by a specific user (WHERE jp.user_id = ?),
+ * ordered newest first.
+ * @param {number|string} ownerUserId
+ * @returns {Promise<Array>}
+ */
+const getApplicationsByJobOwnerId = async (ownerUserId) => {
+  if (ownerUserId === undefined || ownerUserId === null || idIsInvalid(ownerUserId)) {
+    return [];
+  }
+  const targetOwnerId = Number(ownerUserId);
+  const pool = await getPool();
+  const [rows] = await pool.query(
+    `SELECT a.id, a.job_posting_id, a.user_id, a.applicant_name, a.applicant_email,
+            a.resume_url, a.cover_letter, a.status, a.created_at, a.updated_at,
+            jp.title AS job_title, jp.company AS job_company
+     FROM applications a
+     INNER JOIN job_postings jp ON a.job_posting_id = jp.id
+     WHERE jp.user_id = ?
+     ORDER BY a.id DESC`,
+    [targetOwnerId]
+  );
+  return rows.map((row) => ({
+    ...formatApplication(row),
+    job_title: row.job_title || null,
+    job_company: row.job_company || null
+  }));
+};
+
+function parsePositiveIntegerId(val) {
+  if (typeof val === 'number') {
+    return Number.isInteger(val) && val > 0 ? val : null;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+function idIsInvalid(val) {
+  return parsePositiveIntegerId(val) === null;
+}
+
+/**
  * Finds a single application by ID.
  * @param {number|string} id - Application ID
  * @returns {Promise<Object|null>} Application object or null if not found
  */
 const getApplicationById = async (id) => {
-  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+  const applicationId = parsePositiveIntegerId(id);
+  if (applicationId === null) {
     return null;
   }
-  const applicationId = Number(id);
   const pool = await getPool();
   const [rows] = await pool.query(
     'SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications WHERE id = ? LIMIT 1',
@@ -91,10 +168,10 @@ const getApplicationById = async (id) => {
  * @returns {Promise<Array>} List of applications for the job posting
  */
 const getApplicationsByJobPostingId = async (jobPostingId) => {
-  if (jobPostingId === undefined || jobPostingId === null || jobPostingId === '' || isNaN(Number(jobPostingId))) {
+  const targetJobId = parsePositiveIntegerId(jobPostingId);
+  if (targetJobId === null) {
     return [];
   }
-  const targetJobId = Number(jobPostingId);
   const pool = await getPool();
   const [rows] = await pool.query(
     'SELECT id, job_posting_id, user_id, applicant_name, applicant_email, resume_url, cover_letter, status, created_at, updated_at FROM applications WHERE job_posting_id = ? ORDER BY id ASC',
@@ -124,14 +201,10 @@ const createApplication = async (applicationData = {}) => {
   const data = applicationData || {};
 
   const rawJobPostingId = data.job_posting_id !== undefined ? data.job_posting_id : data.jobPostingId;
-  const jobPostingId = rawJobPostingId !== undefined && rawJobPostingId !== null && rawJobPostingId !== '' && !isNaN(Number(rawJobPostingId))
-    ? Number(rawJobPostingId)
-    : 0;
+  const jobPostingId = parsePositiveIntegerId(rawJobPostingId) || 0;
 
   const rawUserId = data.user_id !== undefined ? data.user_id : data.userId;
-  const userId = rawUserId !== undefined && rawUserId !== null && rawUserId !== '' && !isNaN(Number(rawUserId))
-    ? Number(rawUserId)
-    : null;
+  const userId = parsePositiveIntegerId(rawUserId);
 
   const applicantName = data.applicant_name !== undefined
     ? String(data.applicant_name)
@@ -204,10 +277,10 @@ const createApplication = async (applicationData = {}) => {
  * @returns {Promise<Object|null>} Updated application or null if not found
  */
 const updateApplication = async (id, applicationData = {}, isPartial = false) => {
-  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+  const applicationId = parsePositiveIntegerId(id);
+  if (applicationId === null) {
     return null;
   }
-  const applicationId = Number(id);
   const data = applicationData || {};
 
   const hasJobPostingInput =
@@ -222,10 +295,7 @@ const updateApplication = async (id, applicationData = {}, isPartial = false) =>
 
     let requestedJobPostingId = null;
     if (hasJobPostingInput) {
-      requestedJobPostingId =
-        rawJobPostingId !== undefined && rawJobPostingId !== null && rawJobPostingId !== '' && !isNaN(Number(rawJobPostingId))
-          ? Number(rawJobPostingId)
-          : 0;
+      requestedJobPostingId = parsePositiveIntegerId(rawJobPostingId) || 0;
 
       if (!Number.isInteger(requestedJobPostingId) || requestedJobPostingId <= 0) {
         await connection.rollback();
@@ -266,7 +336,7 @@ const updateApplication = async (id, applicationData = {}, isPartial = false) =>
       }
       if (data.user_id !== undefined || data.userId !== undefined) {
         const val = data.user_id !== undefined ? data.user_id : data.userId;
-        updatedUserId = (val !== null && val !== '' && !isNaN(Number(val))) ? Number(val) : null;
+        updatedUserId = parsePositiveIntegerId(val);
       }
       if (data.applicant_name !== undefined) {
         updatedApplicantName = String(data.applicant_name);
@@ -295,9 +365,7 @@ const updateApplication = async (id, applicationData = {}, isPartial = false) =>
       updatedJobPostingId = requestedJobPostingId;
 
       const rawUserId = data.user_id !== undefined ? data.user_id : data.userId;
-      updatedUserId = rawUserId !== undefined && rawUserId !== null && rawUserId !== '' && !isNaN(Number(rawUserId))
-        ? Number(rawUserId)
-        : null;
+      updatedUserId = parsePositiveIntegerId(rawUserId);
 
       updatedApplicantName = data.applicant_name !== undefined
         ? String(data.applicant_name)
@@ -357,10 +425,10 @@ const patchApplication = async (id, partialData) => {
  * @returns {Promise<boolean>} True if deleted, false if application not found
  */
 const deleteApplication = async (id) => {
-  if (id === undefined || id === null || id === '' || isNaN(Number(id))) {
+  const applicationId = parsePositiveIntegerId(id);
+  if (applicationId === null) {
     return false;
   }
-  const applicationId = Number(id);
   const pool = await getPool();
   const [result] = await pool.query(
     'DELETE FROM applications WHERE id = ?',
@@ -376,13 +444,14 @@ const deleteApplication = async (id) => {
  * @returns {Promise<number>}
  */
 const countApplicationsByJobPostingId = async (jobPostingId) => {
-  if (jobPostingId === undefined || jobPostingId === null || jobPostingId === '' || isNaN(Number(jobPostingId))) {
+  const targetJobId = parsePositiveIntegerId(jobPostingId);
+  if (targetJobId === null) {
     return 0;
   }
   const pool = await getPool();
   const [rows] = await pool.query(
     'SELECT COUNT(*) AS count FROM applications WHERE job_posting_id = ?',
-    [Number(jobPostingId)]
+    [targetJobId]
   );
   return Number(rows[0]?.count || 0);
 };
@@ -390,9 +459,12 @@ const countApplicationsByJobPostingId = async (jobPostingId) => {
 module.exports = {
   applications,
   ALLOWED_APPLICATION_STATUSES,
+  idIsInvalid,
   formatApplication,
   getAllApplications,
   getAllApplicationsWithJobDetails,
+  getApplicationsByUserId,
+  getApplicationsByJobOwnerId,
   getApplicationById,
   getApplicationsByJobPostingId,
   countApplicationsByJobPostingId,

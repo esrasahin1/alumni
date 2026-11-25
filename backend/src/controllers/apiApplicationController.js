@@ -1,5 +1,13 @@
 const applicationModel = require('../models/applicationModel');
 const jobPostingModel = require('../models/jobPostingModel');
+const {
+  isSelfApplication,
+  isAdminUser,
+  getApplicationAccessContext,
+  canViewJobApplications,
+  buildWhitelistedCreatePayload,
+  buildWhitelistedUpdatePayload
+} = require('./applicationHelpers');
 
 /**
  * Controller: /api/applications REST API isteklerini ve iş mantığını yönetir (JSON, MySQL)
@@ -7,7 +15,8 @@ const jobPostingModel = require('../models/jobPostingModel');
 
 /**
  * GET /api/applications
- * Tüm başvuruları JSON listesi olarak döner.
+ * - Admin: returns all applications.
+ * - Student / Alumni: returns only applications submitted to job postings owned by req.user.id.
  */
 const getApplications = async (req, res) => {
   try {
@@ -15,16 +24,18 @@ const getApplications = async (req, res) => {
     if (nestedJobId) {
       return await getApplicationsByJobPosting(req, res);
     }
-    const applications = await applicationModel.getAllApplications();
-    res.status(200).json(applications);
+    const applications = isAdminUser(req && req.user)
+      ? await applicationModel.getAllApplications()
+      : await applicationModel.getApplicationsByJobOwnerId(req.user.id);
+    return res.status(200).json(applications);
   } catch (error) {
-    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
  * GET /api/applications/:id
- * ID'ye göre tek bir başvuruyu getirir (Bulunamazsa 404, geçersiz ID ise 400 döner).
+ * Accessible only to the application owner, owning job poster, or Admin.
  */
 const getApplication = async (req, res) => {
   try {
@@ -34,54 +45,68 @@ const getApplication = async (req, res) => {
       return res.status(400).json({ message: "Geçersiz veya eksik başvuru ID'si" });
     }
 
-    const application = await applicationModel.getApplicationById(id);
+    const access = await getApplicationAccessContext(req, id);
 
-    if (!application) {
+    if (!access.application) {
       return res.status(404).json({ message: "Başvuru bulunamadı" });
     }
 
-    res.status(200).json(application);
+    if (!access.isAdmin && !access.isApplicantOwner && !access.isJobOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: You do not have permission to view this application.'
+      });
+    }
+
+    return res.status(200).json(access.application);
   } catch (error) {
-    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
  * POST /api/applications
- * Yeni bir başvuru oluşturur ve JSON döner (201 Created).
+ * Preserves guest submission (user_id = NULL) and binds req.user.id for authenticated callers.
+ * Always forces status = 'PENDING' on creation.
  */
 const createApplication = async (req, res) => {
   try {
-    const body = req && req.body;
-    const rawJobId = body && (body.job_posting_id !== undefined ? body.job_posting_id : body.jobPostingId);
-    const applicantName = body && (body.applicant_name !== undefined ? String(body.applicant_name).trim() : (body.applicantName !== undefined ? String(body.applicantName).trim() : ''));
-    const applicantEmail = body && (body.applicant_email !== undefined ? String(body.applicant_email).trim() : (body.applicantEmail !== undefined ? String(body.applicantEmail).trim() : ''));
+    const payload = buildWhitelistedCreatePayload(req);
 
-    if (!rawJobId || isNaN(Number(rawJobId)) || !applicantName || !applicantEmail) {
+    if (!payload.job_posting_id || payload.job_posting_id <= 0 || !payload.applicant_name || !payload.applicant_email) {
       return res.status(400).json({
         message: "İş ilanı ID'si (job_posting_id), başvuran adı (applicant_name) ve e-posta (applicant_email) alanları zorunludur."
       });
     }
 
-    const targetJobId = Number(rawJobId);
-    const jobPosting = await jobPostingModel.getJobPostingById(targetJobId);
+    const jobPosting = await jobPostingModel.getJobPostingById(payload.job_posting_id);
     if (!jobPosting) {
       return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
     }
 
-    const newApplication = await applicationModel.createApplication(body);
-    res.status(201).json(newApplication);
+    if (isSelfApplication(req && req.user, jobPosting)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Job posting owners cannot apply to their own job posting.'
+      });
+    }
+
+    const newApplication = await applicationModel.createApplication(payload);
+    return res.status(201).json(newApplication);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ message: error.message });
+    }
     if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
       return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
     }
-    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
  * PUT /api/applications/:id
- * Belirtilen ID'deki başvurunun tüm bilgilerini günceller (ID korunur).
+ * Restricted to owning job poster or Admin.
  */
 const updateApplication = async (req, res) => {
   try {
@@ -91,41 +116,64 @@ const updateApplication = async (req, res) => {
       return res.status(400).json({ message: "Geçersiz veya eksik başvuru ID'si" });
     }
 
-    const body = req && req.body;
-    const rawJobId = body && (body.job_posting_id !== undefined ? body.job_posting_id : body.jobPostingId);
-    const applicantName = body && (body.applicant_name !== undefined ? String(body.applicant_name).trim() : (body.applicantName !== undefined ? String(body.applicantName).trim() : ''));
-    const applicantEmail = body && (body.applicant_email !== undefined ? String(body.applicant_email).trim() : (body.applicantEmail !== undefined ? String(body.applicantEmail).trim() : ''));
+    const access = await getApplicationAccessContext(req, id);
+    if (!access.application) {
+      return res.status(404).json({ message: "Başvuru bulunamadı" });
+    }
 
-    if (!rawJobId || isNaN(Number(rawJobId)) || !applicantName || !applicantEmail) {
-      return res.status(400).json({
-        message: "İş ilanı ID'si (job_posting_id), başvuran adı (applicant_name) ve e-posta (applicant_email) alanları zorunludur."
+    if (!access.isAdmin && !access.isJobOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only the job posting owner or an administrator can update this application.'
       });
     }
 
-    const targetJobId = Number(rawJobId);
-    const jobPosting = await jobPostingModel.getJobPostingById(targetJobId);
-    if (!jobPosting) {
-      return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
+    const updatePayload = buildWhitelistedUpdatePayload(req, access.application, {
+      isAdmin: access.isAdmin,
+      isPartial: false
+    });
+
+    if (access.isAdmin) {
+      if (
+        !updatePayload.job_posting_id ||
+        applicationModel.idIsInvalid(updatePayload.job_posting_id) ||
+        !updatePayload.applicant_name ||
+        !updatePayload.applicant_email
+      ) {
+        return res.status(400).json({
+          message: "İş ilanı ID'si (job_posting_id), başvuran adı (applicant_name) ve e-posta (applicant_email) alanları zorunludur."
+        });
+      }
+      const jobPosting = await jobPostingModel.getJobPostingById(Number(updatePayload.job_posting_id));
+      if (!jobPosting) {
+        return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
+      }
     }
 
-    const updatedApplication = await applicationModel.updateApplication(id, body);
+    const updatedApplication = await applicationModel.updateApplication(id, updatePayload, false);
 
     if (!updatedApplication) {
       return res.status(404).json({ message: "Başvuru bulunamadı" });
     }
 
-    res.status(200).json(updatedApplication);
+    return res.status(200).json(updatedApplication);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ message: error.message });
+    }
+    if (error && error.code === 'INVALID_STATUS') {
+      return res.status(400).json({ message: error.message });
+    }
     if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
       return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
     }
-    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
  * PATCH /api/applications/:id
- * Belirtilen ID'deki başvurunun sadece gönderilen alanlarını kısmi olarak günceller.
+ * Restricted to owning job poster or Admin (applicants cannot approve/reject their own applications).
  */
 const patchApplication = async (req, res) => {
   try {
@@ -135,33 +183,54 @@ const patchApplication = async (req, res) => {
       return res.status(400).json({ message: "Geçersiz veya eksik başvuru ID'si" });
     }
 
-    const body = req && req.body;
-    const rawJobId = body && (body.job_posting_id !== undefined ? body.job_posting_id : body.jobPostingId);
-    if (rawJobId !== undefined && rawJobId !== null && !isNaN(Number(rawJobId))) {
-      const jobPosting = await jobPostingModel.getJobPostingById(Number(rawJobId));
+    const access = await getApplicationAccessContext(req, id);
+    if (!access.application) {
+      return res.status(404).json({ message: "Başvuru bulunamadı" });
+    }
+
+    if (!access.isAdmin && !access.isJobOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only the job posting owner or an administrator can update application status.'
+      });
+    }
+
+    const updatePayload = buildWhitelistedUpdatePayload(req, access.application, {
+      isAdmin: access.isAdmin,
+      isPartial: true
+    });
+
+    if (access.isAdmin && updatePayload.job_posting_id !== undefined) {
+      const jobPosting = await jobPostingModel.getJobPostingById(Number(updatePayload.job_posting_id));
       if (!jobPosting) {
         return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
       }
     }
 
-    const updatedApplication = await applicationModel.patchApplication(id, body);
+    const updatedApplication = await applicationModel.patchApplication(id, updatePayload);
 
     if (!updatedApplication) {
       return res.status(404).json({ message: "Başvuru bulunamadı" });
     }
 
-    res.status(200).json(updatedApplication);
+    return res.status(200).json(updatedApplication);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ message: error.message });
+    }
+    if (error && error.code === 'INVALID_STATUS') {
+      return res.status(400).json({ message: error.message });
+    }
     if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
       return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
     }
-    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
  * DELETE /api/applications/:id
- * Belirtilen ID'deki başvuruyu siler (204 No Content veya 404 Not Found döner).
+ * Restricted to application owner or Admin.
  */
 const deleteApplication = async (req, res) => {
   try {
@@ -171,21 +240,32 @@ const deleteApplication = async (req, res) => {
       return res.status(400).json({ message: "Geçersiz veya eksik başvuru ID'si" });
     }
 
-    const isDeleted = await applicationModel.deleteApplication(id);
+    const access = await getApplicationAccessContext(req, id);
+    if (!access.application) {
+      return res.status(404).json({ message: "Başvuru bulunamadı" });
+    }
 
+    if (!access.isAdmin && !access.isApplicantOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only the application owner or an administrator can delete this application.'
+      });
+    }
+
+    const isDeleted = await applicationModel.deleteApplication(id);
     if (!isDeleted) {
       return res.status(404).json({ message: "Başvuru bulunamadı" });
     }
 
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
-    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
  * GET /api/job-postings/:jobPostingId/applications
- * Belirli bir iş ilanına ait tüm başvuruları JSON listesi olarak döner.
+ * Restricted to owning job poster or Admin.
  */
 const getApplicationsByJobPosting = async (req, res) => {
   try {
@@ -201,16 +281,24 @@ const getApplicationsByJobPosting = async (req, res) => {
       return res.status(404).json({ message: "İş ilanı bulunamadı" });
     }
 
+    if (!canViewJobApplications(req && req.user, jobPosting)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only the job posting owner or an administrator can view applications for this job.'
+      });
+    }
+
     const applications = await applicationModel.getApplicationsByJobPostingId(targetJobId);
-    res.status(200).json(applications);
+    return res.status(200).json(applications);
   } catch (error) {
-    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 
 /**
  * POST /api/job-postings/:jobPostingId/applications
- * Belirli bir iş ilanı altına yeni başvuru oluşturur.
+ * Preserves guest submission (user_id = NULL) and binds req.user.id for authenticated callers.
+ * Always forces status = 'PENDING'.
  */
 const createApplicationForJobPosting = async (req, res) => {
   try {
@@ -226,8 +314,14 @@ const createApplicationForJobPosting = async (req, res) => {
       return res.status(404).json({ message: "İş ilanı bulunamadı" });
     }
 
+    if (isSelfApplication(req && req.user, jobPosting)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Job posting owners cannot apply to their own job posting.'
+      });
+    }
+
     const body = req && req.body;
-    // Çelişen job_posting_id kontrolü
     const rawBodyJobId = body && (body.job_posting_id !== undefined ? body.job_posting_id : body.jobPostingId);
     if (rawBodyJobId !== undefined && rawBodyJobId !== null && rawBodyJobId !== '' && !isNaN(Number(rawBodyJobId))) {
       if (Number(rawBodyJobId) !== targetJobId) {
@@ -237,27 +331,24 @@ const createApplicationForJobPosting = async (req, res) => {
       }
     }
 
-    const applicantName = body && (body.applicant_name !== undefined ? String(body.applicant_name).trim() : (body.applicantName !== undefined ? String(body.applicantName).trim() : ''));
-    const applicantEmail = body && (body.applicant_email !== undefined ? String(body.applicant_email).trim() : (body.applicantEmail !== undefined ? String(body.applicantEmail).trim() : ''));
+    const payload = buildWhitelistedCreatePayload(req, targetJobId);
 
-    if (!applicantName || !applicantEmail) {
+    if (!payload.applicant_name || !payload.applicant_email) {
       return res.status(400).json({
         message: "Başvuran adı (applicant_name) ve e-posta (applicant_email) alanları zorunludur."
       });
     }
 
-    const applicationPayload = {
-      ...(body || {}),
-      job_posting_id: targetJobId
-    };
-
-    const newApplication = await applicationModel.createApplication(applicationPayload);
-    res.status(201).json(newApplication);
+    const newApplication = await applicationModel.createApplication(payload);
+    return res.status(201).json(newApplication);
   } catch (error) {
+    if (error && error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ message: error.message });
+    }
     if (error && error.code === 'JOB_POSTING_NOT_FOUND') {
       return res.status(404).json({ message: "Belirtilen iş ilanı bulunamadı" });
     }
-    res.status(500).json({ message: "Sunucu hatası: " + error.message });
+    return res.status(500).json({ message: "Sunucu hatası: " + error.message });
   }
 };
 

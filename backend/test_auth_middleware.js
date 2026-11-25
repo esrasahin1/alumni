@@ -227,7 +227,7 @@ async function runTests() {
       content: 'Protected announcement creation test'
     }, { accept: 'application/json', cookie: sessionCookie.cookiePair });
     if (annRes.body && annRes.body.id) createdAnnouncementIds.add(annRes.body.id);
-    assert.strictEqual(annRes.status, 201);
+    assert.strictEqual(annRes.status, 403, 'Non-admin alumni user must receive 403 on POST /api/announcements');
 
     const jobRes = await request(`/api/users/${testUser.id}/jobs`, 'POST', {
       title: `TEST_MW_JOB ${runId}`,

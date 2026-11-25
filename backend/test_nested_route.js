@@ -97,34 +97,12 @@ async function runTests() {
   let authSessionId = null;
 
   try {
-    // 1. Test existing users in database
-    console.log('--- Test 1: Fetching existing users from DB ---');
-    const users = await userModel.getAllUsers();
-    assert(users.length > 0, 'Database should have users');
+    // 1. Create isolated temporary owner (testUser) and secondary user (otherUser)
+    console.log('--- Test 1: Setting up authenticated owner session for nested route tests ---');
+    const existingUsers = await userModel.getAllUsers();
+    assert(existingUsers.length > 0, 'Database should have users');
+    const otherUser = existingUsers[0];
 
-    // İlanı olmayan bir test kullanıcısı ve izolasyon için ikinci bir kullanıcı belirle
-    let testUser = null;
-    let otherUser = null;
-
-    for (const u of users) {
-      const existingJobs = await jobPostingModel.getJobPostingsByUserId(u.id);
-      if ((!existingJobs || existingJobs.length === 0) && !testUser) {
-        testUser = u;
-      } else if (!otherUser && u !== testUser) {
-        otherUser = u;
-      }
-    }
-
-    if (!testUser) {
-      testUser = users[0];
-    }
-    if (!otherUser) {
-      otherUser = users.find(u => u.id !== testUser.id) || testUser;
-    }
-
-    console.log(`✅ Selected test user #${testUser.id} (${testUser.name}, ${testUser.email})`);
-
-    // Authenticate session for protected API routes
     const authEmail = `nested.auth.${Date.now()}_${process.pid}@alumni.edu.tr`;
     const authPass = 'NestedAuthPass123!';
     const regAuthRes = await request('/register', 'POST', {
@@ -137,6 +115,7 @@ async function runTests() {
     const authUser = await userModel.getUserByEmail(authEmail);
     if (authUser && authUser.id) authUserId = authUser.id;
     assert.strictEqual(regAuthRes.status, 303, 'Temporary auth user registration should succeed');
+    const testUser = authUser;
 
     const loginAuthRes = await request('/login', 'POST', {
       email: authEmail,
@@ -147,15 +126,14 @@ async function runTests() {
     assert(parsedCookie && parsedCookie.cookiePair, 'Session cookie should be issued');
     defaultSessionCookie = parsedCookie.cookiePair;
     authSessionId = parsedCookie.sessionId;
-    console.log('✅ Authenticated session established for protected API endpoints');
+    console.log(`✅ Authenticated as owner #${testUser.id} (${testUser.email}); other user for isolation check: #${otherUser.id}`);
 
-    // 2. Test GET 404 for non-existent user ID
-    console.log('\n--- Test 2: GET /api/users/999999/jobs (Non-existent user) ---');
+    // 2. Test GET 403 when non-admin accesses non-owned user ID (prevents ID probing)
+    console.log('\n--- Test 2: GET /api/users/999999/jobs (Another / non-existent user ID blocked with 403) ---');
     const resGetNonExistent = await request('/api/users/999999/jobs');
     console.log(`Status: ${resGetNonExistent.status}, Response:`, resGetNonExistent.body);
-    assert.strictEqual(resGetNonExistent.status, 404, 'Status should be 404');
-    assert.strictEqual(resGetNonExistent.body.message, 'Kullanıcı bulunamadı', 'Message should be "Kullanıcı bulunamadı"');
-    console.log('✅ GET 404 returned correctly for non-existent user');
+    assert.strictEqual(resGetNonExistent.status, 403, 'Non-admin accessing another ID must get 403');
+    console.log('✅ GET 403 returned correctly for non-owned user ID');
 
     // 3. Test GET 404 for invalid user ID format
     console.log('\n--- Test 3: GET /api/users/invalid_id/jobs (Invalid ID) ---');
@@ -211,17 +189,16 @@ async function runTests() {
     createdJobIds.push(resSpoof.body.id);
     console.log(`✅ URL ID precedence verified! Job was assigned to #${testUser.id}, ignoring body's 888888.`);
 
-    // 7. Test POST 404 for non-existent user ID
-    console.log('\n--- Test 7: POST /api/users/999999/jobs (Non-existent user) ---');
+    // 7. Test POST 403 for another user ID (ownership check)
+    console.log('\n--- Test 7: POST /api/users/999999/jobs (Non-owned ID blocked with 403) ---');
     const resPostNonExistent = await request('/api/users/999999/jobs', 'POST', {
       title: 'TEST_NESTED_JOB Ghost Job',
       company: 'Ghost Corp',
-      description: 'This job must not be created because user does not exist'
+      description: 'This job must not be created because caller does not own ID 999999'
     });
     console.log(`Status: ${resPostNonExistent.status}, Response:`, resPostNonExistent.body);
-    assert.strictEqual(resPostNonExistent.status, 404, 'Status should be 404');
-    assert.strictEqual(resPostNonExistent.body.message, 'Kullanıcı bulunamadı', 'Message should be "Kullanıcı bulunamadı"');
-    console.log('✅ POST 404 returned correctly for non-existent user');
+    assert.strictEqual(resPostNonExistent.status, 403, 'Status should be 403 Forbidden');
+    console.log('✅ POST 403 returned correctly for non-owned user ID');
 
     // 8. Test POST 404 for invalid user ID format
     console.log('\n--- Test 8: POST /api/users/invalid_id/jobs (Invalid user ID) ---');
@@ -256,14 +233,16 @@ async function runTests() {
     assert(resWithJobs.body.every(j => j.user_id === testUser.id), 'All jobs must belong to testUser');
     console.log('✅ GET /api/users/:id/jobs still works perfectly and returns both created jobs!');
 
-    // 11. Verify user isolation (another user sees empty array)
-    console.log(`\n--- Test 11: GET /api/users/${otherUser.id}/jobs (Another user: ${otherUser.email}) ---`);
+    // 11. Verify cross-user isolation (accessing another user's nested jobs returns 403)
+    console.log(`\n--- Test 11: GET & POST /api/users/${otherUser.id}/jobs (Another user blocked with 403) ---`);
     const resOtherUser = await request(`/api/users/${otherUser.id}/jobs`);
-    assert.strictEqual(resOtherUser.status, 200, 'Status should be 200');
-    assert(Array.isArray(resOtherUser.body), 'Response body should be an array');
-    const hasTestJob = resOtherUser.body.some(j => createdJobIds.includes(j.id));
-    assert.strictEqual(hasTestJob, false, 'Other user should not see testUser jobs');
-    console.log('✅ User isolation verified! Only testUser sees their nested jobs.');
+    assert.strictEqual(resOtherUser.status, 403, 'Status should be 403 Forbidden for another user');
+    const resPostOtherUser = await request(`/api/users/${otherUser.id}/jobs`, 'POST', {
+      title: 'Unauthorized Nested Job',
+      company: 'Other Corp'
+    });
+    assert.strictEqual(resPostOtherUser.status, 403, 'Status should be 403 Forbidden when posting to another user');
+    console.log('✅ User isolation verified! Cross-user access is strictly blocked with 403.');
 
     // 12. Test Swagger documentation contains both GET and POST for /api/users/{id}/jobs
     console.log('\n--- Test 12: Verify Swagger doc.json contains GET and POST for /api/users/{id}/jobs ---');

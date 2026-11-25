@@ -3,6 +3,7 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const alumniRoutes = require('./routes/alumniRoutes');
 const authRoutes = require('./routes/authRoutes');
+const profileRoutes = require('./routes/profileRoutes');
 const userRoutes = require('./routes/userRoutes');
 const apiUserRoutes = require('./routes/apiUserRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
@@ -21,6 +22,7 @@ const errorHandlerMiddleware = require('./middlewares/errorHandlerMiddleware');
 const { sessionMiddleware } = require('./config/session');
 const { attachCurrentUser } = require('./middlewares/authContextMiddleware');
 const { requireAuth } = require('./middlewares/requireAuthMiddleware');
+const { applicationCsrfProtection } = require('./middlewares/applicationCsrfMiddleware');
 const { renderHomePage } = require('./views/homeView');
 const { renderAboutPage } = require('./views/aboutView');
 
@@ -70,6 +72,7 @@ app.get('/about', (req, res) => {
 
 // Rotalar
 app.use('/', authRoutes);
+app.use('/profile', profileRoutes);
 app.use('/alumni', alumniRoutes);
 app.use('/users', userRoutes);
 app.use('/api/users', apiUserRoutes);
@@ -79,12 +82,13 @@ app.use('/job-postings', jobPostingRoutes);
 app.use('/api/job-postings', apiJobPostingRoutes);
 
 // Nested routes under Job Postings (review/listing protected, guest submission preserved)
-app.get('/job-postings/:jobPostingId/applications', requireAuth, applicationController.getApplicationsByJobPosting);
-app.post('/job-postings/:jobPostingId/applications', applicationController.createApplicationForJobPosting);
+app.get('/job-postings/:jobPostingId/applications', requireAuth, applicationCsrfProtection, applicationController.getApplicationsByJobPosting);
+app.post('/job-postings/:jobPostingId/applications', applicationCsrfProtection, applicationController.createApplicationForJobPosting);
 app.get('/api/job-postings/:jobPostingId/applications', requireAuth, apiApplicationController.getApplicationsByJobPosting);
 app.post('/api/job-postings/:jobPostingId/applications', apiApplicationController.createApplicationForJobPosting);
 
 // Direct Application routes
+app.get('/my-applications', requireAuth, applicationController.getMyApplications);
 app.use('/applications', applicationRoutes);
 app.use('/api/applications', apiApplicationRoutes);
 
